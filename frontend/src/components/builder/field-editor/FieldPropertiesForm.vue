@@ -13,6 +13,7 @@ type FieldProperty = {
     fieldname: keyof FormField;
     component: Component;
     props: Record<string, any>;
+    visible?: boolean;
 };
 
 const fieldProperties = computed(() => {
@@ -103,6 +104,45 @@ const fieldProperties = computed(() => {
             component: ConditionalLogicSection,
             props: {},
         },
+        {
+            fieldname: "field_key",
+            component: FormControl,
+            props: {
+                type: "text",
+                label: "Field Key (Internal)",
+                description: "Stable unique identifier used for form mapping.",
+                disabled: true,
+            },
+        },
+        {
+            fieldname: "source_type",
+            component: FormControl,
+            props: {
+                type: "select",
+                label: "Source Type",
+                options: ["Custom", "Mapped"],
+            },
+        },
+        {
+            fieldname: "target_field",
+            component: FormControl,
+            props: {
+                type: "text",
+                label: "Target Field",
+                description: "The fieldname in the target DocType this maps to.",
+            },
+            visible: editFormStore.selectedField?.source_type === "Mapped",
+        },
+        {
+            fieldname: "mapping_type",
+            component: FormControl,
+            props: {
+                type: "select",
+                label: "Mapping Type",
+                options: ["Direct", "Expression", "Webhook"],
+            },
+            visible: editFormStore.selectedField?.source_type === "Mapped",
+        },
     ] as FieldProperty[];
 });
 </script>
@@ -116,6 +156,7 @@ const fieldProperties = computed(() => {
         <template v-if="editFormStore.selectedField">
             <template v-for="property in fieldProperties" :key="property.fieldname">
                 <component
+                    v-if="property.visible !== false"
                     :is="property.component"
                     v-model="editFormStore.selectedField[property.fieldname]"
                     v-bind="property.props"
