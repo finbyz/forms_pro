@@ -4,6 +4,8 @@ import FormBuilderHeader from "@/components/FormBuilderHeader.vue";
 import FormBuilderSidebar from "@/components/FormBuilderSidebar.vue";
 import FormBuilderContent from "@/components/FormBuilderContent.vue";
 import FieldEditorSidebar from "@/components/FieldEditorSidebar.vue";
+import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
+import ThemeEditor from "@/components/studio/design/ThemeEditor.vue";
 
 const activeTab = ref("Build");
 </script>
@@ -19,16 +21,10 @@ const activeTab = ref("Build");
                 </div>
             </template>
             <template v-else-if="activeTab === \"Success\"">
-                <div class="flex flex-col w-full items-center justify-center bg-gray-50 text-gray-500">
-                    <div class="text-xl font-medium mb-2">Success Page Designer</div>
-                    <div>Visual designer for form submission success pages.</div>
-                </div>
+                <SuccessCanvas />
             </template>
             <template v-else-if="activeTab === \"Design\"">
-                <div class="flex flex-col w-full items-center justify-center bg-gray-50 text-gray-500">
-                    <div class="text-xl font-medium mb-2">Theme Designer</div>
-                    <div>Design system tokens, typography, and colors.</div>
-                </div>
+                <ThemeEditor />
             </template>
             <template v-else-if="activeTab === \"Settings\"">
                 <div class="flex flex-col w-full items-center justify-center bg-gray-50 text-gray-500">

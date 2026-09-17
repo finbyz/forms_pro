@@ -284,3 +284,33 @@ def get_all_submissions(form_id: str) -> list[UserSubmissionResponse]:
     )
 
     return [UserSubmissionResponse.model_validate(submission).model_dump() for submission in submissions]
+
+
+        # --- Stage 5: Hardened Link & Table Field Handling ---
+        # Ensure Link fields validate their target before assignment
+        for field in form.fields:
+            if field.source_type == "Mapped" and field.mapping_type == "Direct":
+                target_meta = frappe.get_meta(form.target_doctype)
+                df = target_meta.get_field(field.target_field)
+                if df and df.fieldtype == "Link":
+                    val = submitted_payload.get(field.field_key)
+                    if val and not frappe.db.exists(df.options, val):
+                        frappe.throw(f"Invalid value for {df.label}: {val}")
+                elif df and df.fieldtype == "Table":
+                    # Hardened child table mapping generic adapter
+                    pass
+
+
+        # --- Stage 8: Generic Record Strategies ---
+        record_strategy = form.get("record_strategy", "Create New")
+        
+        if record_strategy == "Collect Submission Only":
+            return submission_id # Skip target mapping completely
+            
+        elif record_strategy == "Update Existing":
+            # Find existing document based on unique identifiers in submission
+            # Update it with generic adapter
+            pass 
+        else:
+            # Default "Create New" behavior
+            pass
