@@ -12,6 +12,37 @@ import SuccessSection from "@/components/submission/SuccessSection.vue";
 const route = useRoute();
 const submissionFormStore = useSubmissionForm();
 submissionFormStore.initialize(route.params.route as string);
+
+import { onMounted, onUnmounted, watch } from "vue";
+
+// Embed integration: Resize observer
+let resizeObserver: ResizeObserver | null = null;
+onMounted(() => {
+    if (window !== window.parent) {
+        resizeObserver = new ResizeObserver((entries) => {
+            const height = entries[0].target.scrollHeight;
+            window.parent.postMessage({ type: "formspro:resize", height }, "*");
+        });
+        resizeObserver.observe(document.body);
+    }
+});
+
+onUnmounted(() => {
+    if (resizeObserver) {
+        resizeObserver.disconnect();
+    }
+});
+
+// Embed integration: Submission success event
+watch(() => submissionFormStore.inSuccessState, (isSuccess) => {
+    if (isSuccess && window !== window.parent) {
+        window.parent.postMessage({ 
+            type: "formspro:submitted", 
+            payload: { route: route.params.route } 
+        }, "*");
+    }
+});
+
 </script>
 <template>
     <div class="p-8 bg-surface-gray-1 min-h-svh space-y-16">
