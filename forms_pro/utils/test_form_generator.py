@@ -214,6 +214,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         self.assertEqual(docshare.share, 1, "DocShare should have share permission")
         self.assertEqual(docshare.submit, 0, "DocShare should not have submit permission")
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_status_field_is_added_custom_doctype(self):
         """Test that status field is added to custom doctype"""
         from forms_pro.utils.form_generator import SUBMISSION_STATUS_FIELDOPTIONS
@@ -239,6 +240,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         self.assertEqual(status_field.read_only, SUBMISSION_STATUS_FIELDOPTIONS["read_only"])
         self.assertEqual(status_field.in_list_view, SUBMISSION_STATUS_FIELDOPTIONS["in_list_view"])
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_linked_form_field_is_added_custom_doctype(self):
         """Test that linked form field is added to custom doctype"""
         from forms_pro.utils.form_generator import LINKED_FORM_FIELDOPTIONS

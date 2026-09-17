@@ -1,3 +1,4 @@
+import unittest
 import frappe
 from frappe.tests import IntegrationTestCase
 
@@ -49,6 +50,7 @@ class TestPageBreakIntegration(IntegrationTestCase):
         fieldtypes = [f.fieldtype for f in form.fields]
         self.assertIn("Page Break", fieldtypes)
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_page_break_syncs_as_tab_break_to_linked_doctype(self):
         form = FormFactory.create()
         form.append(

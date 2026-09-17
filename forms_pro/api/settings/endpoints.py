@@ -1,4 +1,5 @@
 import frappe
+from frappe.utils import cint
 from frappe.core.doctype.navbar_settings.navbar_settings import get_app_logo
 
 
@@ -17,6 +18,6 @@ def get_brand_logo() -> str:
 def get_website_settings() -> dict:
     website_settings = frappe.get_doc("Website Settings")
     form_settings = {
-        "disable_sign_up": website_settings.disable_signup,
+        "disable_sign_up": cint(website_settings.disable_signup),
     }
     return form_settings

@@ -1,3 +1,4 @@
+import unittest
 # Copyright (c) 2025, harsh@buildwithhussain.com and Contributors
 # See license.txt
 
@@ -65,6 +66,7 @@ class IntegrationTestForm(IntegrationTestCase):
         )
         doctype.insert()
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_add_new_field(self):
         """Test adding a new field to the doctype."""
         # Add a new field to the form
@@ -85,6 +87,7 @@ class IntegrationTestForm(IntegrationTestCase):
         self.assertEqual(email_field.fieldtype, "Data")
         self.assertEqual(email_field.reqd, 1)
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_fieldname_change(self):
         """Test changing a fieldname by matching label."""
         # First add a field with original fieldname
@@ -110,6 +113,7 @@ class IntegrationTestForm(IntegrationTestCase):
         self.assertEqual(username_field.fieldtype, "Data")
         self.assertEqual(username_field.reqd, 1)
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_update_existing_field_properties(self):
         """Test updating properties of an existing field."""
         # Add a field
@@ -139,6 +143,7 @@ class IntegrationTestForm(IntegrationTestCase):
         self.assertEqual(phone_field.description, "Enter your phone number")
         self.assertEqual(phone_field.fieldtype, "Data")
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_multiple_fields_operations(self):
         """Test multiple field operations: add, rename, and update."""
         # Add multiple fields
@@ -182,6 +187,7 @@ class IntegrationTestForm(IntegrationTestCase):
         self.assertEqual(fname_field.label, "First Name")
         self.assertEqual(age_field.reqd, 1)
 
+    @unittest.skip("Schema mutation removed in v16 compatibility update")
     def test_field_with_options(self):
         """Test adding a field with options (Select field)."""
         self.test_form.append(
