@@ -12,6 +12,10 @@ export type FormField = {
   default?: string;
   idx?: number;
   conditional_logic?: string;
+  field_key?: string;
+  source_type?: "Custom" | "Mapped";
+  target_field?: string;
+  mapping_type?: "Direct" | "Expression" | "Webhook";
   row_index?: number;
   column_index?: number;
   cell_index?: number;

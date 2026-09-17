@@ -121,7 +121,7 @@
    "fieldname": "source_type",
    "fieldtype": "Select",
    "label": "Source Type",
-   "options": "Custom\\nMapped",
+   "options": "Custom\nMapped",
    "default": "Mapped"
   },
   {
@@ -134,7 +134,7 @@
    "fieldname": "mapping_type",
    "fieldtype": "Select",
    "label": "Mapping Type",
-   "options": "Direct\\nExpression\\nWebhook",
+   "options": "Direct\nExpression\nWebhook",
    "default": "Direct",
    "depends_on": "eval:doc.source_type=='Mapped'"
   }
