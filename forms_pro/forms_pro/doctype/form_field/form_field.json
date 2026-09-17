@@ -18,7 +18,12 @@
   "column_break_yznn",
   "options",
   "default",
-  "conditional_logic"
+  "conditional_logic",
+  "mapping_section",
+  "field_key",
+  "source_type",
+  "target_field",
+  "mapping_type"
  ],
  "fields": [
   {
@@ -99,6 +104,39 @@
    "label": "Cell Index",
    "non_negative": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "mapping_section",
+   "fieldtype": "Section Break",
+   "label": "Data Mapping"
+  },
+  {
+   "fieldname": "field_key",
+   "fieldtype": "Data",
+   "label": "Field Key",
+   "read_only": 1,
+   "description": "Unique identifier for this field payload"
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "Custom\\nMapped",
+   "default": "Mapped"
+  },
+  {
+   "fieldname": "target_field",
+   "fieldtype": "Data",
+   "label": "Target Field",
+   "depends_on": "eval:doc.source_type=='Mapped'"
+  },
+  {
+   "fieldname": "mapping_type",
+   "fieldtype": "Select",
+   "label": "Mapping Type",
+   "options": "Direct\\nExpression\\nWebhook",
+   "default": "Direct",
+   "depends_on": "eval:doc.source_type=='Mapped'"
   }
  ],
  "grid_page_length": 50,
