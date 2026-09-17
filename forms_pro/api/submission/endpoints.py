@@ -3,6 +3,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from forms_pro.utils.mapping import FormMappingEngine
 from frappe.share import add_docshare
 
 from forms_pro.forms_pro.doctype.form.form import Form
@@ -130,7 +131,6 @@ def submit_form_response(
 
     try:
         form: Form = frappe.get_doc("Form", form_id)
-        linked_doctype = form.linked_doctype
 
         if not form.is_published:
             frappe.throw(
@@ -140,30 +140,19 @@ def submit_form_response(
 
         form_data_dict = {item["fieldname"]: item["value"] for item in form_data}
 
-        # Whitelist to declared form fields only — prevents injecting system fields
-        # like owner, docstatus, etc. into the linked DocType.
+        # Whitelist to declared form fields only
         allowed_fieldnames = {f.fieldname for f in form.fields}
         form_data_dict = {k: v for k, v in form_data_dict.items() if k in allowed_fieldnames}
 
         if status == SubmissionStatus.SUBMITTED:
             _validate_form_response(form, form_data_dict)
 
-        submission = frappe.new_doc(linked_doctype)
-        for fieldname, value in form_data_dict.items():
-            # JSON fields (e.g. Multiselect) must be stored as a JSON string,
-            # but Frappe deserializes request body arrays into Python lists before
-            # we get here — serialize them back.
-            if isinstance(value, list):
-                value = json.dumps(value)
-            submission.set(fieldname, value)
+        engine = FormMappingEngine(form_id=form_id)
+        submission = engine.process_submission(form_data_dict, status.value)
 
-        submission.fp_linked_form = form_id
-        submission.fp_submission_status = status.value
-        submission.insert(ignore_permissions=True, ignore_mandatory=True)
-
-        # Share the submission with the owner
+        # Share the submission with the owner (FP Form Submission)
         add_docshare(
-            doctype=linked_doctype,
+            doctype="FP Form Submission",
             name=submission.name,
             user=frappe.session.user,
             read=1,
@@ -172,6 +161,19 @@ def submit_form_response(
                 "ignore_share_permission": True,
             },
         )
+        
+        # If the target document was created, share it too
+        if submission.target_doctype and getattr(submission, "target_document", None):
+            add_docshare(
+                doctype=submission.target_doctype,
+                name=submission.target_document,
+                user=frappe.session.user,
+                read=1,
+                write=1,
+                flags={
+                    "ignore_share_permission": True,
+                },
+            )
 
         return submission.name
     except Exception:
