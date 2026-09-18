@@ -67,7 +67,7 @@ class TestPageBreakIntegration(IntegrationTestCase):
         )
         form.save()
 
-        doctype_doc = frappe.get_doc("DocType", form.linked_doctype)
+        doctype_doc = frappe.get_doc("DocType", form.target_doctype)
         synced = {f.fieldname: f for f in doctype_doc.fields}
         self.assertIn("step_2", synced)
         self.assertEqual(synced["step_2"].fieldtype, "Tab Break")

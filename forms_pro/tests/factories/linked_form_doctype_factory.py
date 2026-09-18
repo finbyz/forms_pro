@@ -16,7 +16,7 @@ class LinkedFormDoctypeFactory(BaseFactory[Document]):
     Form. The DocType carries `fp_submission_status` and `fp_linked_form`
     so a Form pointing at it accepts submissions immediately.
 
-    Use as the linked_doctype for `FormFactory`.
+    Use as the target_doctype for `FormFactory`.
     """
 
     doctype = "DocType"

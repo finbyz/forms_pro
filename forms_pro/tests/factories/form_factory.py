@@ -12,7 +12,7 @@ class FormFactory(BaseFactory[Form]):
     """
     Builds a Form linked to a placeholder custom DocType (created via
     `LinkedFormDoctypeFactory`) and a fresh `FP Team`. Pass
-    `linked_doctype=<name>` to attach to an existing DocType (e.g. for
+    `target_doctype=<name>` to attach to an existing DocType (e.g. for
     multi-form scoping tests) and `linked_team_id=<name>` to bind to an
     existing team.
     """
@@ -28,8 +28,8 @@ class FormFactory(BaseFactory[Form]):
 
         return {
             "title": _fake.unique.sentence(nb_words=3).rstrip("."),
-            "linked_doctype": (
-                self.overrides.get("linked_doctype") or LinkedFormDoctypeFactory.create().name
+            "target_doctype": (
+                self.overrides.get("target_doctype") or LinkedFormDoctypeFactory.create().name
             ),
             "linked_team_id": (self.overrides.get("linked_team_id") or FPTeamFactory.create().name),
         }
