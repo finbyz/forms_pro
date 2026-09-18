@@ -30,7 +30,7 @@ function ejectToOwnRow() {
 
 <template>
     <div
-        class="relative flex-1 min-w-0 transition-colors group"
+        class="relative flex-1 min-w-0 transition-all duration-200 ease-out group cursor-pointer hover:shadow-sm active:scale-[0.99]"
         data-form-builder-component="field-card"
         :data-field-label="props.field.label ?? ''"
         :data-field-name="props.field.fieldname ?? ''"
@@ -38,6 +38,7 @@ function ejectToOwnRow() {
         :data-col-index="props.field.column_index ?? 0"
         :data-cell-index="props.field.cell_index ?? 0"
         @click="editFormStore.selectField(props.field)"
+        style="transition-property: transform, box-shadow; transition-timing-function: ease-out;"
     >
         <FieldActions
             :isSelected="editFormStore.selectedField === props.field"
@@ -55,3 +56,11 @@ function ejectToOwnRow() {
         />
     </div>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: reduce) {
+    .transition-all {
+        transition: none !important;
+    }
+}
+</style>

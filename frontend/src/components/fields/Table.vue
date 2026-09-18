@@ -23,9 +23,11 @@ const columnResource = useCall({
     params: {
         doctype: props.doctype,
     },
+    immediate: false,
 });
 
 const columns = computed(() => {
+    if (!props.doctype) return [];
     const data = columnResource.data;
     if (!Array.isArray(data)) {
         return [];
@@ -37,6 +39,12 @@ const columns = computed(() => {
         fieldtype: mapDoctypeFieldForForm(column.fieldtype) ?? "Data",
     }));
 });
+
+watch(() => props.doctype, (newDoctype) => {
+    if (newDoctype) {
+        columnResource.fetch();
+    }
+}, { immediate: false });
 
 function addRow() {
     const newRow = columns.value.reduce((acc, column) => {
