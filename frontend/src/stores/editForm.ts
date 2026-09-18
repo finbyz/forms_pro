@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { ref, computed, watch, onUnmounted } from "vue";
 import { createDocumentResource, createResource } from "frappe-ui";
 import {
   mapDoctypeFieldForForm,
@@ -19,6 +19,7 @@ import { FormField, Fieldtype } from "@/types/formfield";
 import { Form } from "@/types/form";
 import { toast } from "vue-sonner";
 import { dialog } from "@/utils/dialog";
+import { useHistoryStore } from "@/stores/history";
 
 export const useEditForm = defineStore("editForm", () => {
   const formResource = ref<any>(null);
@@ -58,14 +59,133 @@ export const useEditForm = defineStore("editForm", () => {
     () => formResource.value?.originalDoc || null
   );
 
+  // History (undo/redo)
+  const history = useHistoryStore();
+  let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  const AUTOSAVE_DEBOUNCE_MS = 1500;
+  const MAX_HISTORY = 50;
+  let skipSnapshot = false;
+
+  function snapshot() {
+    if (skipSnapshot || !formResource.value?.doc?.fields) return;
+    history.saveState({
+      fields: JSON.parse(JSON.stringify(formResource.value.doc.fields)),
+      title: formResource.value.doc.title,
+    });
+    if (history.past.length > MAX_HISTORY) {
+      history.past.shift();
+    }
+  }
+
+  function undo() {
+    if (history.past.length === 0 || !formResource.value?.doc) return;
+    skipSnapshot = true;
+    try {
+      const prev = history.undo({
+        fields: JSON.parse(JSON.stringify(formResource.value.doc.fields)),
+        title: formResource.value.doc.title,
+      });
+      if (prev) {
+        formResource.value.doc.fields = prev.fields;
+        formResource.value.doc.title = prev.title;
+        formResource.value.isDirty = true;
+        triggerAutosave();
+      }
+    } finally {
+      skipSnapshot = false;
+    }
+  }
+
+  function redo() {
+    if (history.future.length === 0 || !formResource.value?.doc) return;
+    skipSnapshot = true;
+    try {
+      const next = history.redo({
+        fields: JSON.parse(JSON.stringify(formResource.value.doc.fields)),
+        title: formResource.value.doc.title,
+      });
+      if (next) {
+        formResource.value.doc.fields = next.fields;
+        formResource.value.doc.title = next.title;
+        formResource.value.isDirty = true;
+        triggerAutosave();
+      }
+    } finally {
+      skipSnapshot = false;
+    }
+  }
+
+  const canUndo = computed(() => history.past.length > 0);
+  const canRedo = computed(() => history.future.length > 0);
+
+  // Autosave
+  function triggerAutosave() {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(async () => {
+      if (!formResource.value) return;
+      try {
+        await save();
+      } catch {
+        // silent fail — user can still manually save
+      }
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  function cancelAutosave() {
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+    }
+  }
+
+  // Watch fields for autosave + history snapshots
+  watch(
+    () => formResource.value?.doc?.fields,
+    (_new, _old) => {
+      if (!skipSnapshot && formResource.value?.doc?.fields) {
+        snapshot();
+        triggerAutosave();
+      }
+    },
+    { deep: true }
+  );
+
+  // Dirty-state: warn before leaving
+  function setupDirtyGuard() {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isUnsaved.value) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }
+
+  let removeDirtyGuard: (() => void) | null = null;
+  function enableDirtyGuard() {
+    if (!removeDirtyGuard) removeDirtyGuard = setupDirtyGuard();
+  }
+  function disableDirtyGuard() {
+    if (removeDirtyGuard) {
+      removeDirtyGuard();
+      removeDirtyGuard = null;
+    }
+  }
+
+  onUnmounted(() => {
+    cancelAutosave();
+    disableDirtyGuard();
+  });
+
   async function getDoctypeFields() {
-    if (formResource.value?.doc?.linked_doctype) {
+    if (formResource.value?.doc?.target_doctype) {
       const _fields = createResource({
         url: "forms_pro.api.form.get_doctype_fields",
         method: "GET",
         makeParams() {
           return {
-            doctype: formResource.value?.doc?.linked_doctype,
+            doctype: formResource.value?.doc?.target_doctype,
           };
         },
         transform: (data: any) => {
@@ -97,6 +217,8 @@ export const useEditForm = defineStore("editForm", () => {
         },
         onSuccess: () => {
           getDoctypeFields();
+          enableDirtyGuard();
+          snapshot();
         },
       });
     }
@@ -145,6 +267,11 @@ export const useEditForm = defineStore("editForm", () => {
     if (!formResource.value) {
       toast.error("No form resource available");
       return Promise.reject(new Error("No form resource available"));
+    }
+
+    // Ensure title is never empty
+    if (!formResource.value.doc.title || !formResource.value.doc.title.trim()) {
+      formResource.value.doc.title = "Untitled Form";
     }
 
     const duplicates = findDuplicateFieldnames();
@@ -411,6 +538,8 @@ export const useEditForm = defineStore("editForm", () => {
     isMultiSection,
     activeSectionFields,
     activeSectionIndex,
+    canUndo,
+    canRedo,
 
     // Actions
     initialize,
@@ -432,5 +561,12 @@ export const useEditForm = defineStore("editForm", () => {
     moveField,
     insertCell,
     insertNewRow,
+    undo,
+    redo,
+    snapshot,
+    triggerAutosave,
+    cancelAutosave,
+    enableDirtyGuard,
+    disableDirtyGuard,
   };
 });

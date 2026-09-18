@@ -6,7 +6,6 @@ import FormRenderer from "@/components/submission/FormRenderer.vue";
 import StepIndicator from "@/components/submission/StepIndicator.vue";
 import Logo from "@/assets/Logo.vue";
 import PageHeader from "@/components/submission/PageHeader.vue";
-import PreviousSubmissionSection from "@/components/submission/PreviousSubmissionSection.vue";
 import SuccessSection from "@/components/submission/SuccessSection.vue";
 
 const route = useRoute();
@@ -47,7 +46,6 @@ watch(() => submissionFormStore.inSuccessState, (isSuccess) => {
 <template>
     <div class="p-8 bg-surface-gray-1 min-h-svh space-y-16">
         <PageHeader />
-        <PreviousSubmissionSection v-if="submissionFormStore.userSubmissions" />
         <FormUnpublishedState
             v-if="!submissionFormStore.formIsPublished"
             class="form-container-simple"

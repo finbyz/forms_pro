@@ -4,7 +4,6 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { FormField } from "@/types/formfield";
 import { useStorage } from "@vueuse/core";
-import { session } from "@/data/session";
 import {
   shouldFieldBeRequired,
   shouldFieldBeVisible,
@@ -76,25 +75,6 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     nextStep();
   }
 
-  const userSubmissionsResource = createResource({
-    url: "forms_pro.api.submission.get_user_submissions",
-    makeParams() {
-      return {
-        form_id: currentFormId.value,
-      };
-    },
-    auto: false,
-  });
-
-  const userSubmissions = computed((): UserSubmission[] | null => {
-    if (
-      userSubmissionsResource.data &&
-      userSubmissionsResource.data.length > 0
-    ) {
-      return userSubmissionsResource.data;
-    }
-    return null;
-  });
 
   function initializeFields() {
     if (!formResource.value?.data) return;
@@ -135,9 +115,6 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     });
 
     await formResource.value.fetch();
-    if (session.isLoggedIn) {
-      await userSubmissionsResource.fetch();
-    }
   }
 
   function saveAsDraft() {
@@ -175,7 +152,6 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
         if (is_draft) {
           toast.info("Draft saved successfully");
           inFormFillingState.value = true;
-          userSubmissionsResource.fetch();
         } else {
           inFormFillingState.value = false;
           inSuccessState.value = true;
@@ -231,8 +207,6 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     errors,
     inSuccessState,
     inFormFillingState,
-    userSubmissionsResource,
-    userSubmissions,
     formIsPublished,
     initialize,
     submitForm,
