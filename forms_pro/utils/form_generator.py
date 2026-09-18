@@ -8,7 +8,7 @@ from frappe.share import add_docshare
 FORMS_PRO_ROLE = "Forms Pro User"
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_form_with_doctype(team_id: str, doctype: str):
     roles = frappe.get_roles(frappe.session.user)
     if FORMS_PRO_ROLE not in roles:
@@ -18,7 +18,7 @@ def create_form_with_doctype(team_id: str, doctype: str):
         )
 
     try:
-        form_generator = FormGenerator(team_id=team_id, linked_doctype=doctype)
+        form_generator = FormGenerator(team_id=team_id, target_doctype=doctype)
         form_generator.generate()
     except Exception as e:
         frappe.log_error(f"Error creating form with doctype: {doctype} - {e}")
@@ -32,7 +32,7 @@ def create_form_with_doctype(team_id: str, doctype: str):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_form(team_id: str):
     roles = frappe.get_roles(frappe.session.user)
     if FORMS_PRO_ROLE not in roles:
@@ -89,12 +89,12 @@ class FormGenerator:
     def __init__(
         self,
         team_id: str,
-        linked_doctype: str | None = None,
+        target_doctype: str | None = None,
     ) -> None:
         self.doctype = None
         self.team_id = team_id
-        if linked_doctype:
-            self.doctype = frappe.get_doc("DocType", linked_doctype)
+        if target_doctype:
+            self.doctype = frappe.get_doc("DocType", target_doctype)
 
     def generate(self) -> None:
         self._initialize_doctype()
@@ -158,8 +158,9 @@ class FormGenerator:
 
     def _initialize_form_document(self) -> None:
         form_document = frappe.new_doc("Form")
-        form_document.linked_doctype = self.doctype.name
+        form_document.target_doctype = self.doctype.name
         form_document.title = "Untitled Form"
+        form_document.status = "Draft"
         form_document.linked_team_id = self.team_id
         form_document.document_type = "System"
         form_document.insert(ignore_permissions=True)

@@ -111,6 +111,7 @@ def get_team_forms(team_id: str) -> list[GetTeamFormsResponseSchema]:
             "modified",
             "linked_team_id",
         ],
+        order_by="modified desc",
     )
 
     data = [GetTeamFormsResponseSchema.model_validate(form).model_dump() for form in forms]

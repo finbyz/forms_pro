@@ -18,21 +18,28 @@ class FormMappingEngine:
         # Save raw submission
         submission = frappe.new_doc("FP Form Submission")
         submission.form = self.form.name
-        # Use a dummy version if we haven't implemented versioning freeze yet
-        submission.form_version = self.form.name  # TODO: link to actual FP Form Version
+        # Find the latest Form Version
+        latest_version = frappe.get_all("FP Form Version", filters={"form": self.form.name}, order_by="creation desc", limit=1)
+        if latest_version:
+            submission.form_version = latest_version[0].name
+        else:
+            submission.form_version = None
+
         submission.route = self.form.route
-        submission.target_doctype = self.form.linked_doctype
-        submission.status = status
+        submission.target_doctype = self.form.target_doctype
+        # 'status' param is "Submitted" or "Draft" from frontend.
+        # FP Form Submission doctype only accepts Success, Failed, Processing.
+        submission.status = "Processing" if status == "Draft" else "Success"
         submission.payload = json.dumps(form_data_dict)
-        submission.insert(ignore_permissions=True)
+        submission.insert(ignore_permissions=True, ignore_mandatory=True)
         
-        if status == "Submitted" and self.form.linked_doctype:
+        if status == "Submitted" and self.form.target_doctype:
             try:
                 target_doc = self._map_to_target(form_data_dict)
                 submission.target_document = target_doc.name
                 submission.save(ignore_permissions=True)
             except Exception as e:
-                submission.status = "Sync Failed"
+                submission.status = "Failed"
                 submission.validation_errors = json.dumps({"error": str(e)})
                 submission.save(ignore_permissions=True)
                 # We might want to bubble up the error or just return the submission
@@ -43,10 +50,10 @@ class FormMappingEngine:
         """
         Maps the raw payload to the target DocType based on form_field mapping_type.
         """
-        target_doc = frappe.new_doc(self.form.linked_doctype)
+        target_doc = frappe.new_doc(self.form.target_doctype)
         
         for field in self.fields:
-            if field.source_type == "Mapped" and field.target_field:
+            if field.target_field:
                 val = form_data_dict.get(field.fieldname)
                 if val is not None:
                     # JSON fields must be stored as a JSON string for Frappe if needed
