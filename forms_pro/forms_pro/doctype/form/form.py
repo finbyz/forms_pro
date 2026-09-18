@@ -56,6 +56,8 @@ class Form(Document):
     def before_insert(self) -> None:
         self.is_published = False
         self.route = self.generate_initial_route()
+        if not self.title:
+            self.title = "Untitled Form"
 
     def validate(self) -> None:
         if self.target_doctype:
