@@ -30,7 +30,7 @@ class IntegrationTestForm(IntegrationTestCase):
             {
                 "doctype": "Form",
                 "title": "Test Form",
-                "linked_doctype": self.test_doctype_name,
+                "target_doctype": self.test_doctype_name,
                 "fields": [],
                 "linked_team_id": self.test_team,
             }
@@ -255,7 +255,7 @@ class TestBackfillFieldLayoutPatch(IntegrationTestCase):
         self.test_team = get_user_teams(FORMS_PRO_TEST_USER)[0]["name"]
 
     def tearDown(self):
-        for name in frappe.get_all("Form", filters={"linked_doctype": self._test_doctype_name}, pluck="name"):
+        for name in frappe.get_all("Form", filters={"target_doctype": self._test_doctype_name}, pluck="name"):
             frappe.delete_doc("Form", name, force=True, ignore_permissions=True)
         if frappe.db.exists("DocType", self._test_doctype_name):
             frappe.delete_doc("DocType", self._test_doctype_name, force=True)
@@ -265,7 +265,7 @@ class TestBackfillFieldLayoutPatch(IntegrationTestCase):
             {
                 "doctype": "Form",
                 "title": "Patch Test Form",
-                "linked_doctype": self._test_doctype_name,
+                "target_doctype": self._test_doctype_name,
                 "linked_team_id": self.test_team,
                 "fields": [
                     {"label": "Field A", "fieldname": "field_a", "fieldtype": "Data"},

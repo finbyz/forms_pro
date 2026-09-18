@@ -4,69 +4,197 @@
  "creation": "2026-01-01 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": [
-  "form",
-  "form_version",
-  "route",
-  "target_doctype",
-  "target_document",
-  "status",
-  "payload",
-  "validation_errors"
- ],
+"field_order": [
+   "form",
+   "form_version",
+   "route",
+   "submitted_at",
+   "target_doctype",
+   "target_document",
+   "target_name",
+   "operation",
+   "status_section",
+   "status",
+   "processing_status",
+   "error_code",
+   "error_summary",
+   "retry_count",
+   "payload_section",
+   "payload",
+   "response_json",
+   "validation_errors",
+   "tracking_section",
+   "source_url",
+   "referrer",
+   "utm_source",
+   "utm_medium",
+   "utm_campaign",
+   "utm_term",
+   "utm_content",
+   "gclid"
+  ],
  "fields": [
-  {
-   "fieldname": "form",
-   "fieldtype": "Link",
-   "options": "Form",
-   "label": "Form",
-   "reqd": 1,
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "form_version",
-   "fieldtype": "Link",
-   "options": "FP Form Version",
-   "label": "Form Version",
-   "reqd": 1
-  },
-  {
-   "fieldname": "route",
-   "fieldtype": "Data",
-   "label": "Route",
-   "read_only": 1
-  },
-  {
-   "fieldname": "target_doctype",
-   "fieldtype": "Data",
-   "label": "Target DocType",
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "target_document",
-   "fieldtype": "Dynamic Link",
-   "options": "target_doctype",
-   "label": "Target Document"
-  },
-  {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "options": "Draft\\nSubmitted\\nSync Failed",
-   "default": "Draft",
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "payload",
-   "fieldtype": "Code",
-   "options": "JSON",
-   "label": "Payload JSON"
-  },
-  {
-   "fieldname": "validation_errors",
-   "fieldtype": "Code",
-   "options": "JSON",
-   "label": "Validation Errors JSON"
-  }
+{
+    "fieldname": "form",
+    "fieldtype": "Link",
+    "options": "Form",
+    "label": "Form",
+    "reqd": 1,
+    "in_list_view": 1
+   },
+   {
+    "fieldname": "form_version",
+    "fieldtype": "Link",
+    "options": "FP Form Version",
+    "label": "Form Version",
+    "reqd": 1
+   },
+   {
+    "fieldname": "route",
+    "fieldtype": "Data",
+    "label": "Route",
+    "read_only": 1
+   },
+   {
+    "fieldname": "submitted_at",
+    "fieldtype": "Datetime",
+    "label": "Submitted At",
+    "read_only": 1,
+    "in_list_view": 1
+   },
+   {
+    "fieldname": "target_doctype",
+    "fieldtype": "Data",
+    "label": "Target DocType",
+    "in_list_view": 1
+   },
+   {
+    "fieldname": "target_document",
+    "fieldtype": "Dynamic Link",
+    "options": "target_doctype",
+    "label": "Target Document"
+   },
+   {
+    "fieldname": "target_name",
+    "fieldtype": "Data",
+    "label": "Target Name",
+    "read_only": 1
+   },
+   {
+    "fieldname": "operation",
+    "fieldtype": "Select",
+    "options": "Create\nUpdate\nCreate or Update\nCollect Only",
+    "label": "Operation",
+    "read_only": 1
+   },
+   {
+    "fieldname": "status_section",
+    "fieldtype": "Section Break",
+    "label": "Status"
+   },
+   {
+    "fieldname": "status",
+    "fieldtype": "Select",
+    "options": "Success\nFailed\nProcessing",
+    "default": "Processing",
+    "in_list_view": 1,
+    "label": "Status"
+   },
+   {
+    "fieldname": "processing_status",
+    "fieldtype": "Select",
+    "options": "Pending\nValidating\nMapping\nCreating\nUpdating\nCompleted\nFailed",
+    "default": "Pending",
+    "label": "Processing Status",
+    "read_only": 1
+   },
+   {
+    "fieldname": "error_code",
+    "fieldtype": "Data",
+    "label": "Error Code",
+    "read_only": 1
+   },
+   {
+    "fieldname": "error_summary",
+    "fieldtype": "Small Text",
+    "label": "Error Summary",
+    "read_only": 1
+   },
+   {
+    "fieldname": "retry_count",
+    "fieldtype": "Int",
+    "label": "Retry Count",
+    "default": "0",
+    "read_only": 1
+   },
+   {
+    "fieldname": "payload_section",
+    "fieldtype": "Section Break",
+    "label": "Payload"
+   },
+   {
+    "fieldname": "payload",
+    "fieldtype": "Code",
+    "options": "JSON",
+    "label": "Payload JSON"
+   },
+   {
+    "fieldname": "response_json",
+    "fieldtype": "Code",
+    "options": "JSON",
+    "label": "Response JSON"
+   },
+   {
+    "fieldname": "validation_errors",
+    "fieldtype": "Code",
+    "options": "JSON",
+    "label": "Validation Errors JSON"
+   },
+   {
+    "fieldname": "tracking_section",
+    "fieldtype": "Section Break",
+    "label": "Tracking"
+   },
+   {
+    "fieldname": "source_url",
+    "fieldtype": "Data",
+    "label": "Source URL"
+   },
+   {
+    "fieldname": "referrer",
+    "fieldtype": "Data",
+    "label": "Referrer"
+   },
+   {
+    "fieldname": "utm_source",
+    "fieldtype": "Data",
+    "label": "UTM Source"
+   },
+   {
+    "fieldname": "utm_medium",
+    "fieldtype": "Data",
+    "label": "UTM Medium"
+   },
+   {
+    "fieldname": "utm_campaign",
+    "fieldtype": "Data",
+    "label": "UTM Campaign"
+   },
+   {
+    "fieldname": "utm_term",
+    "fieldtype": "Data",
+    "label": "UTM Term"
+   },
+   {
+    "fieldname": "utm_content",
+    "fieldtype": "Data",
+    "label": "UTM Content"
+   },
+   {
+    "fieldname": "gclid",
+    "fieldtype": "Data",
+    "label": "GCLID"
+   }
  ],
  "links": [],
  "modified": "2026-01-01 00:00:00.000000",
@@ -83,7 +211,9 @@
    "delete": 1
   }
  ],
- "sort_field": "modified",
+ "sort_field": "submitted_at",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "index_web_pages_for_search": 1,
+ "track_changes": 1
 }

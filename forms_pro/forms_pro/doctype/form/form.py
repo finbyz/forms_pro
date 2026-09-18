@@ -24,7 +24,7 @@ class Form(Document):
         description: DF.TextEditor | None
         fields: DF.Table[FormField]
         is_published: DF.Check
-        linked_doctype: DF.Link
+        target_doctype: DF.Link
         linked_team_id: DF.Link
         login_required: DF.Check
         metadata: DF.Code | None
@@ -37,8 +37,8 @@ class Form(Document):
     pass
 
     @property
-    def linked_doctype_doc(self) -> Document:
-        return frappe.get_doc("DocType", self.linked_doctype)
+    def target_doctype_doc(self) -> Document:
+        return frappe.get_doc("DocType", self.target_doctype)
 
     @frappe.whitelist()
     def shared_with(self) -> list[dict[str, Any]]:
@@ -58,9 +58,9 @@ class Form(Document):
         self.route = self.generate_initial_route()
 
     def validate(self) -> None:
-        if self.linked_doctype:
-            if not frappe.db.exists("DocType", self.linked_doctype):
-                frappe.throw(_("Target DocType {0} does not exist").format(self.linked_doctype))
+        if self.target_doctype:
+            if not frappe.db.exists("DocType", self.target_doctype):
+                frappe.throw(_("Target DocType {0} does not exist").format(self.target_doctype))
         
         if self.route:
             filters = {"route": self.route, "name": ["!=", self.name]}

@@ -1,0 +1,86 @@
+{
+    "actions": [],
+    "autoname": "field:theme_name",
+    "creation": "2026-09-17 10:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "theme_name",
+        "font_family",
+        "primary_color",
+        "background_color",
+        "input_radius",
+        "card_radius",
+        "custom_css"
+    ],
+    "fields": [
+        {
+            "fieldname": "theme_name",
+            "fieldtype": "Data",
+            "label": "Theme Name",
+            "reqd": 1,
+            "unique": 1
+        },
+        {
+            "fieldname": "font_family",
+            "fieldtype": "Data",
+            "label": "Font Family",
+            "default": "Inter"
+        },
+        {
+            "fieldname": "primary_color",
+            "fieldtype": "Color",
+            "label": "Primary Color",
+            "default": "#1D4ED8"
+        },
+        {
+            "fieldname": "background_color",
+            "fieldtype": "Color",
+            "label": "Background Color",
+            "default": "#FFFFFF"
+        },
+        {
+            "fieldname": "input_radius",
+            "fieldtype": "Data",
+            "label": "Input Radius",
+            "default": "8px"
+        },
+        {
+            "fieldname": "card_radius",
+            "fieldtype": "Data",
+            "label": "Card Radius",
+            "default": "12px"
+        },
+        {
+            "fieldname": "custom_css",
+            "fieldtype": "Code",
+            "label": "Custom CSS",
+            "options": "CSS"
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-09-17 10:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Forms Pro",
+    "name": "FP Form Theme",
+    "naming_rule": "By fieldname",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}

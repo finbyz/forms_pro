@@ -1,0 +1,75 @@
+{
+    "actions": [],
+    "creation": "2026-09-17 10:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "captcha_provider",
+        "recaptcha_site_key",
+        "recaptcha_secret_key",
+        "default_score_threshold",
+        "require_captcha_for_public_forms",
+        "allowed_embed_origins"
+    ],
+    "fields": [
+        {
+            "fieldname": "captcha_provider",
+            "fieldtype": "Select",
+            "label": "CAPTCHA Provider",
+            "options": "Google reCAPTCHA v3",
+            "default": "Google reCAPTCHA v3"
+        },
+        {
+            "fieldname": "recaptcha_site_key",
+            "fieldtype": "Data",
+            "label": "reCAPTCHA Site Key"
+        },
+        {
+            "fieldname": "recaptcha_secret_key",
+            "fieldtype": "Password",
+            "label": "reCAPTCHA Secret Key"
+        },
+        {
+            "fieldname": "default_score_threshold",
+            "fieldtype": "Float",
+            "label": "Default Score Threshold",
+            "default": "0.5"
+        },
+        {
+            "fieldname": "require_captcha_for_public_forms",
+            "fieldtype": "Check",
+            "label": "Require CAPTCHA for Public Forms",
+            "default": "1"
+        },
+        {
+            "fieldname": "allowed_embed_origins",
+            "fieldtype": "Text",
+            "label": "Allowed Embed Origins (One per line)"
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "issingle": 1,
+    "links": [],
+    "modified": "2026-09-17 10:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Forms Pro",
+    "name": "Forms Pro Settings",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}
