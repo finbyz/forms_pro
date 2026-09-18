@@ -138,6 +138,10 @@ doc_events = {
     "User Invitation": {
         "after_insert": "forms_pro.overrides.invitations.after_insert",
     },
+    "Form Field": {
+        "before_insert": "forms_pro.services.authoring.schema.generate_field_key",
+        "before_save": "forms_pro.services.authoring.schema.generate_field_key",
+    },
 }
 
 # Scheduled Tasks
