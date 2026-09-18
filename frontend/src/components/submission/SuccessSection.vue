@@ -42,7 +42,7 @@ const successDescription = computed(() => {
         <h2 class="text-3xl font-bold text-center">{{ successTitle }}</h2>
         <TextEditor
             :content="successDescription"
-            editor-class="h-fit !w-full form-description !px-0 max-w-full max-h-full"
+            editor-class="h-fit !w-full prose prose-sm prose-gray max-w-none p-5 !px-0 max-w-full max-h-full"
             :editable="false"
         />
     </div>

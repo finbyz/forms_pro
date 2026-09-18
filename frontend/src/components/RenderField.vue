@@ -20,6 +20,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    disabled: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const value = defineModel();
@@ -40,6 +44,7 @@ const getComponent = computed(() => {
         :field="props.field"
         :options="resolvedOptions"
         :in-edit-mode="props.inEditMode"
+        :disabled="props.disabled"
         v-bind="getComponent.props"
     />
 </template>

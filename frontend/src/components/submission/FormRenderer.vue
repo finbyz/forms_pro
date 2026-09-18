@@ -82,8 +82,10 @@ function colKey(col: FormField[], cIdx: number) {
             </template>
         </div>
 
-        <hr class="mt-4" />
-        <ErrorMessage :message="store.errors.join('\n')" class="mt-4" />
+        <div v-if="store.errors.length > 0">
+            <hr class="mt-4" />
+            <ErrorMessage :message="store.errors.join('\n')" class="mt-4" />
+        </div>
 
         <!-- Footer: progress pills left, buttons right -->
         <div class="flex items-center justify-between mt-4">
@@ -94,9 +96,9 @@ function colKey(col: FormField[], cIdx: number) {
                     :key="idx"
                     class="h-[5px] rounded-full transition-all duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                     :class="{
-                        'w-1.5 bg-surface-gray-5': idx - 1 < store.currentStepIndex,
-                        'w-5 bg-surface-gray-7': idx - 1 === store.currentStepIndex,
-                        'w-1.5 bg-surface-gray-3': idx - 1 > store.currentStepIndex,
+                        'w-1.5 bg-gray-400': idx - 1 < store.currentStepIndex,
+                        'w-5 bg-gray-800': idx - 1 === store.currentStepIndex,
+                        'w-1.5 bg-gray-200': idx - 1 > store.currentStepIndex,
                     }"
                 />
             </div>
