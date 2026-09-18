@@ -1,0 +1,1 @@
+from forms_pro.services.mapping.adapters import get_adapter
