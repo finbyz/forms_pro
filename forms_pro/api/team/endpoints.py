@@ -118,7 +118,7 @@ def invite_team_members(team_id: str, emails: list[str]) -> None:
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_member_to_team_via_invitation(team_id: str, invite_id: str | None = None) -> None:
     """
     Add a member to a team when an invitation is accepted.

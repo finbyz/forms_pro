@@ -34,7 +34,7 @@ def export_submissions(form_id: str, file_type: Literal["CSV", "Excel"] = "CSV")
         )
 
     form: Form = frappe.get_doc("Form", form_id)
-    linked_doctype = form.linked_doctype
+    target_doctype = form.target_doctype
 
     columns = [
         "name",
@@ -43,11 +43,11 @@ def export_submissions(form_id: str, file_type: Literal["CSV", "Excel"] = "CSV")
         "fp_submission_status",
         *[field.fieldname for field in form.fields if field.stores_value],
     ]
-    select_columns = {linked_doctype: columns}
+    select_columns = {target_doctype: columns}
 
     # Audit the export under the real (non-Admin) user before the swap.
     make_access_log(
-        doctype=linked_doctype,
+        doctype=target_doctype,
         file_type=file_type,
         columns=frappe.as_json(columns),
         method="forms_pro.api.export.export_submissions",
@@ -61,7 +61,7 @@ def export_submissions(form_id: str, file_type: Literal["CSV", "Excel"] = "CSV")
         # Authorization is already enforced via `has_permission("Form", "write", ...)` above. The swap bypasses `can_export` on the linked DocType (intentionally not granted at the role level in Forms Pro). Session state is snapshotted immediately above and fully restored in `finally`. Audited 2026-05-13.
         frappe.set_user("Administrator")  # nosemgrep: frappe-semgrep-rules.rules.security.frappe-setuser
         exporter = DataExporter(
-            doctype=linked_doctype,
+            doctype=target_doctype,
             all_doctypes=False,
             with_data=True,
             select_columns=frappe.as_json(select_columns),

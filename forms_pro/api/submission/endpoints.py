@@ -104,7 +104,7 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
         frappe.throw("\n".join(errors), frappe.ValidationError)
 
 
-@frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
+@frappe.whitelist(allow_guest=True, methods=["POST"])  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
 def submit_form_response(
     form_id: str,
     form_data: list[dict],
@@ -193,10 +193,10 @@ def get_user_submissions(form_id: str) -> list[UserSubmissionResponse]:
         A list of submissions for the user
     """
     form: Form = frappe.get_doc("Form", form_id)
-    linked_doctype = form.linked_doctype
+    target_doctype = form.target_doctype
 
     submissions = frappe.get_all(
-        doctype=linked_doctype,
+        doctype=target_doctype,
         filters={"owner": frappe.session.user},
         fields=["name", "creation", "modified", "fp_submission_status", "owner"],
         order_by="creation",
@@ -213,7 +213,7 @@ def get_submission_response(submission_id: str, doctype: str) -> dict[str, Any]:
 
     Args:
         submission_id: The name/ID of the submission document
-        doctype: The submission's doctype (linked_doctype of the form)
+        doctype: The submission's doctype (target_doctype of the form)
 
     Returns:
         The submission document as a dict
@@ -222,9 +222,9 @@ def get_submission_response(submission_id: str, doctype: str) -> dict[str, Any]:
     if not linked_form:
         frappe.throw(_("Submission not found."), frappe.DoesNotExistError)
 
-    form_data = frappe.db.get_value("Form", linked_form, ["linked_team_id", "linked_doctype"], as_dict=True)
+    form_data = frappe.db.get_value("Form", linked_form, ["linked_team_id", "target_doctype"], as_dict=True)
 
-    if form_data.linked_doctype != doctype:
+    if form_data.target_doctype != doctype:
         frappe.throw(_("Invalid doctype for this submission."), frappe.PermissionError)
 
     if not frappe.has_permission(
@@ -235,7 +235,7 @@ def get_submission_response(submission_id: str, doctype: str) -> dict[str, Any]:
             frappe.PermissionError,
         )
 
-    submission = frappe.get_doc(form_data.linked_doctype, submission_id)
+    submission = frappe.get_doc(form_data.target_doctype, submission_id)
     return submission.as_dict()
 
 
@@ -274,43 +274,13 @@ def get_all_submissions(form_id: str) -> list[UserSubmissionResponse]:
         A list of submissions for the form
     """
     form: Form = frappe.get_doc("Form", form_id)
-    linked_doctype = form.linked_doctype
+    target_doctype = form.target_doctype
 
     submissions = frappe.get_all(
-        doctype=linked_doctype,
+        doctype=target_doctype,
         fields=["name", "creation", "modified", "fp_submission_status", "owner"],
         filters={"fp_submission_status": "Submitted"},
         order_by="creation",
     )
 
     return [UserSubmissionResponse.model_validate(submission).model_dump() for submission in submissions]
-
-
-        # --- Stage 5: Hardened Link & Table Field Handling ---
-        # Ensure Link fields validate their target before assignment
-        for field in form.fields:
-            if field.source_type == "Mapped" and field.mapping_type == "Direct":
-                target_meta = frappe.get_meta(form.target_doctype)
-                df = target_meta.get_field(field.target_field)
-                if df and df.fieldtype == "Link":
-                    val = submitted_payload.get(field.field_key)
-                    if val and not frappe.db.exists(df.options, val):
-                        frappe.throw(f"Invalid value for {df.label}: {val}")
-                elif df and df.fieldtype == "Table":
-                    # Hardened child table mapping generic adapter
-                    pass
-
-
-        # --- Stage 8: Generic Record Strategies ---
-        record_strategy = form.get("record_strategy", "Create New")
-        
-        if record_strategy == "Collect Submission Only":
-            return submission_id # Skip target mapping completely
-            
-        elif record_strategy == "Update Existing":
-            # Find existing document based on unique identifiers in submission
-            # Update it with generic adapter
-            pass 
-        else:
-            # Default "Create New" behavior
-            pass

@@ -51,7 +51,7 @@ def get_form(form_id: str) -> dict:
         "route": form.route,
         "is_published": form.is_published,
         "allow_incomplete": form.allow_incomplete,
-        "linked_doctype": form.linked_doctype,
+        "target_doctype": form.target_doctype,
         "success_title": form.success_title,
         "success_description": form.success_description,
     }
@@ -92,6 +92,7 @@ def get_link_field_options(
         filters=filters or {},
         page_length=page_length,
         fields=["name as value", f"{title_field} as label"],
+        order_by="modified desc",
     )
     return results
 
@@ -119,7 +120,7 @@ def get_form_shared_with(form_id: str) -> list[frappe.Any]:
     return shared_with_responses
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 @require_permission("Form", "write", param="form_id")
 def remove_form_access(form_id: str, user_email: str) -> None:
     """Remove access to a form for a user.
@@ -134,7 +135,7 @@ def remove_form_access(form_id: str, user_email: str) -> None:
     return remove(doctype="Form", name=form_id, user=user_email, flags={"ignore_permissions": True})
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 @require_permission("Form", "share", param="form_id")
 def add_form_access(
     form_id: str,
@@ -175,7 +176,7 @@ def add_form_access(
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 @require_permission("Form", "share", param="form_id")
 def set_form_permission(
     form_id: str,
@@ -231,11 +232,13 @@ def get_doctype_list() -> list[str]:
 
 
 @frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
-def get_doctype_fields(doctype: str) -> list:
-    doctype = frappe.get_doc("DocType", doctype)
+def get_doctype_fields(doctype: str = "") -> list:
+    if not doctype or not frappe.db.exists("DocType", doctype):
+        return []
+    doc = frappe.get_doc("DocType", doctype)
     fields = [
         field
-        for field in doctype.fields
+        for field in doc.fields
         if field.fieldtype not in UNSUPPORTED_FRAPPE_FIELDTYPES
         and field.fieldname not in FORMS_PRO_SYSTEM_FIELDNAMES
     ]
