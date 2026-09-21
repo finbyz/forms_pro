@@ -3,7 +3,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from forms_pro.utils.mapping import FormMappingEngine
+from forms_pro.services.submissions.processor import SubmissionProcessor
 from frappe.share import add_docshare
 
 from forms_pro.forms_pro.doctype.form.form import Form
@@ -147,35 +147,10 @@ def submit_form_response(
         if status == SubmissionStatus.SUBMITTED:
             _validate_form_response(form, form_data_dict)
 
-        engine = FormMappingEngine(form_id=form_id)
-        submission = engine.process_submission(form_data_dict, status.value)
+        processor = SubmissionProcessor(form_id=form_id, form_data=form_data_dict, status=status.value)
+        result = processor.process()
 
-        # Share the submission with the owner (FP Form Submission)
-        add_docshare(
-            doctype="FP Form Submission",
-            name=submission.name,
-            user=frappe.session.user,
-            read=1,
-            write=1,
-            flags={
-                "ignore_share_permission": True,
-            },
-        )
-        
-        # If the target document was created, share it too
-        if submission.target_doctype and getattr(submission, "target_document", None):
-            add_docshare(
-                doctype=submission.target_doctype,
-                name=submission.target_document,
-                user=frappe.session.user,
-                read=1,
-                write=1,
-                flags={
-                    "ignore_share_permission": True,
-                },
-            )
-
-        return submission.name
+        return result["submission_id"]
     except Exception:
         raise
 
