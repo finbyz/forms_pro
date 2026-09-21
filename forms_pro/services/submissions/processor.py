@@ -19,15 +19,20 @@ from forms_pro.services.publishing.compiler import FormCompiler
 class SubmissionProcessor:
     """Orchestrates form submission: validate, map, persist target, log result."""
 
-    def __init__(self, form_id: str, form_data: dict[str, Any], metadata: dict[str, Any] | None = None) -> None:
+    def __init__(self, form_id: str, form_data: dict[str, Any], metadata: dict[str, Any] | None = None, status: str = "Submitted") -> None:
         self.form_id = form_id
         self.form_data = form_data
         self.metadata = metadata or {}
+        self.status = status
         self.form_doc = frappe.get_doc("Form", form_id)
 
     def process(self) -> dict[str, Any]:
         submission = self._create_submission_record()
         try:
+            if self.status == "Draft":
+                self._update_processing_status(submission.name, "Completed")
+                return {"submission_id": submission.name, "status": "Draft"}
+
             self._update_processing_status(submission.name, "Validating")
             self._validate_form()
 
@@ -68,7 +73,7 @@ class SubmissionProcessor:
         submission.form_version = self._resolve_version()
         submission.route = self.form_doc.route
         submission.target_doctype = self.form_doc.target_doctype
-        submission.status = "Processing"
+        submission.status = "Processing" if self.status == "Draft" else "Success"
         submission.processing_status = "Pending"
         submission.submitted_at = datetime.utcnow()
         submission.payload = json.dumps(self.form_data)
@@ -80,14 +85,12 @@ class SubmissionProcessor:
         submission.utm_term = self.metadata.get("utm_term")
         submission.utm_content = self.metadata.get("utm_content")
         submission.gclid = self.metadata.get("gclid")
-        submission.insert(ignore_permissions=True)
+        submission.insert(ignore_permissions=True, ignore_mandatory=True)
         return submission
 
     def _resolve_version(self) -> str | None:
-        active_version = frappe.db.get_value("Form", self.form_id, "active_version")
-        if active_version:
-            return active_version
-        return None
+        latest = frappe.get_all("FP Form Version", filters={"form": self.form_id}, order_by="creation desc", limit=1)
+        return latest[0].name if latest else None
 
     def _validate_form(self) -> None:
         if not self.form_doc.target_doctype:
