@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useUser } from "@/stores/user";
 import { Dropdown, TextInput } from "frappe-ui";
-import { ChevronsUpDown, Search } from "@lucide/vue";
 import { computed, inject, ref } from "vue";
 import CreateTeamDialog from "@/components/team/CreateTeamDialog.vue";
 import TeamSwitcherItem from "@/components/team/TeamSwitcherItem.vue";
@@ -91,7 +90,7 @@ const groupOptions = computed(() => {
                             :label="userStore.currentTeam!.team_name"
                             :logo-url="userStore.currentTeam?.logo ?? null"
                         />
-                        <ChevronsUpDown class="size-4 text-ink-gray-6" />
+                        <span class="lucide-chevrons-up-down text-ink-gray-6" aria-hidden="true" />
                     </div>
                 </div>
             </template>
@@ -105,7 +104,7 @@ const groupOptions = computed(() => {
                         class="w-full"
                     >
                         <template #prefix>
-                            <Search class="size-4 text-ink-gray-5" />
+                            <span class="lucide-search text-ink-gray-5" aria-hidden="true" />
                         </template>
                     </TextInput>
                 </div>

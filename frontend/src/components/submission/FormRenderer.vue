@@ -6,7 +6,6 @@ import { computed } from "vue";
 import { shouldFieldBeVisible, shouldFieldBeRequired } from "@/utils/conditionals";
 import { useGroupedRows } from "@/composables/useGroupedRows";
 import type { FormField } from "@/types/formfield";
-import { ArrowRight } from "@lucide/vue";
 
 const store = useSubmissionForm();
 
@@ -124,7 +123,7 @@ function colKey(col: FormField[], cIdx: number) {
                     >
                         <span class="flex items-center gap-1.5">
                             Next
-                            <ArrowRight class="w-3.5 h-3.5" :stroke-width="2.2" />
+                            <span class="lucide-arrow-right w-3 h-3" aria-hidden="true" />
                         </span>
                     </Button>
                     <Button

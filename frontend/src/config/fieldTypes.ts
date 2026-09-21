@@ -32,31 +32,6 @@ import {
   TimePicker,
   FormControl,
 } from "frappe-ui";
-import {
-  AlignLeft,
-  AtSign,
-  Calendar,
-  CalendarClock,
-  CalendarRange,
-  Clock,
-  Hash,
-  Heading1,
-  Heading2,
-  Heading3,
-  KeyRound,
-  Link2,
-  List,
-  ListChecks,
-  Paperclip,
-  Phone as PhoneIcon,
-  Pilcrow,
-  SeparatorHorizontal,
-  SquareCheck,
-  Star,
-  Table as TableIcon,
-  ToggleRight,
-  Type,
-} from "@lucide/vue";
 import Attachment from "@/components/fields/Attachment.vue";
 import Heading from "@/components/fields/Heading.vue";
 import PageBreak from "@/components/fields/PageBreak.vue";
@@ -91,7 +66,7 @@ export type FieldTypeDefinition = {
   /** Vue component used to render this field in input mode */
   component: Component;
   /** Lucide icon used in the Add Fields palette */
-  icon: Component;
+  icon: string;
   /** Default props forwarded to the component */
   props: Record<string, unknown>;
   /** How FieldRenderer lays out the label relative to the input */
@@ -116,7 +91,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.ATTACH,
     component: Attachment,
-    icon: Paperclip,
+    icon: "lucide-paperclip",
     props: {
       variant: "outline",
       filetypes: ["image/*", ".jpg", ".gif", ".pdf"],
@@ -129,7 +104,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.DATA,
     component: FormControl,
-    icon: Type,
+    icon: "lucide-type",
     props: { type: "text", variant: "outline" },
     layout: "default",
     frappeFieldtype: "Data",
@@ -139,7 +114,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.NUMBER,
     component: FormControl,
-    icon: Hash,
+    icon: "lucide-hash",
     props: { type: "number", variant: "outline" },
     layout: "default",
     frappeFieldtype: "Int",
@@ -149,7 +124,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.EMAIL,
     component: FormControl,
-    icon: AtSign,
+    icon: "lucide-at-sign",
     props: { type: "email", variant: "outline" },
     layout: "default",
     frappeFieldtype: "Data",
@@ -160,7 +135,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.DATE,
     component: DatePicker,
-    icon: Calendar,
+    icon: "lucide-calendar",
     props: { variant: "outline", clearable: true, format: "D MMM YYYY" },
     layout: "default",
     frappeFieldtype: "Date",
@@ -170,7 +145,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.DATE_TIME,
     component: DateTimePicker,
-    icon: CalendarClock,
+    icon: "lucide-calendar-clock",
     props: {
       format: "DD MMM YYYY, hh:mm A",
       clearable: true,
@@ -184,7 +159,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.DATE_RANGE,
     component: DateRangePicker,
-    icon: CalendarRange,
+    icon: "lucide-calendar-range",
     props: { clearable: true, variant: "outline", format: "DD MMM 'YY" },
     layout: "default",
     frappeFieldtype: "Data",
@@ -194,7 +169,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.TIME_PICKER,
     component: TimePicker,
-    icon: Clock,
+    icon: "lucide-clock",
     props: { variant: "outline", use12Hour: true, clearable: true },
     layout: "default",
     frappeFieldtype: "Time",
@@ -204,7 +179,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.PASSWORD,
     component: Password,
-    icon: KeyRound,
+    icon: "lucide-key-round",
     props: { variant: "outline" },
     layout: "default",
     frappeFieldtype: "Password",
@@ -214,7 +189,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.SELECT,
     component: Select,
-    icon: List,
+    icon: "lucide-list",
     props: { variant: "outline" },
     layout: "default",
     frappeFieldtype: "Select",
@@ -224,7 +199,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.PHONE,
     component: Phone,
-    icon: PhoneIcon,
+    icon: "lucide-phone",
     props: { variant: "outline" },
     layout: "default",
     frappeFieldtype: "Phone",
@@ -234,7 +209,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.SWITCH,
     component: Switch,
-    icon: ToggleRight,
+    icon: "lucide-toggle-right",
     props: {},
     layout: "inline",
     frappeFieldtype: "Check",
@@ -244,7 +219,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.TEXTAREA,
     component: Textarea,
-    icon: AlignLeft,
+    icon: "lucide-align-left",
     props: { variant: "outline" },
     layout: "default",
     frappeFieldtype: "Text",
@@ -254,7 +229,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.TEXT_EDITOR,
     component: TextEditor,
-    icon: Pilcrow,
+    icon: "lucide-pilcrow",
     props: {
       editorClass:
         "bg-surface-white w-full rounded-b form-description border rounded-b min-h-24",
@@ -270,7 +245,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.LINK,
     component: Select,
-    icon: Link2,
+    icon: "lucide-link-2",
     props: { variant: "outline" },
     layout: "default",
     frappeFieldtype: "Link",
@@ -280,7 +255,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.CHECKBOX,
     component: Checkbox,
-    icon: SquareCheck,
+    icon: "lucide-square-check",
     props: {},
     layout: "inline",
     frappeFieldtype: "Check",
@@ -290,7 +265,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.RATING,
     component: Rating,
-    icon: Star,
+    icon: "lucide-star",
     props: {},
     layout: "default",
     frappeFieldtype: "Rating",
@@ -300,7 +275,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.TABLE,
     component: Table,
-    icon: TableIcon,
+    icon: "lucide-table",
     props: {
       options: {
         emptyState: {
@@ -317,7 +292,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.MULTISELECT,
     component: Multiselect,
-    icon: ListChecks,
+    icon: "lucide-list-checks",
     props: {},
     layout: "description-first",
     frappeFieldtype: "JSON",
@@ -328,7 +303,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.HEADING_1,
     component: Heading,
-    icon: Heading1,
+    icon: "lucide-heading-1",
     props: {},
     layout: "heading",
     frappeFieldtype: "HTML",
@@ -338,7 +313,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.HEADING_2,
     component: Heading,
-    icon: Heading2,
+    icon: "lucide-heading-2",
     props: {},
     layout: "heading",
     frappeFieldtype: "HTML",
@@ -348,7 +323,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.HEADING_3,
     component: Heading,
-    icon: Heading3,
+    icon: "lucide-heading-3",
     props: {},
     layout: "heading",
     frappeFieldtype: "HTML",
@@ -358,7 +333,7 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   {
     name: Fieldtype.PAGE_BREAK,
     component: PageBreak,
-    icon: SeparatorHorizontal,
+    icon: "lucide-separator-horizontal",
     props: {},
     layout: "page-break",
     frappeFieldtype: "Tab Break",

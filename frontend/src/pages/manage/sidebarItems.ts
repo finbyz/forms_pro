@@ -1,7 +1,7 @@
-import { ArrowLeft, LayoutGrid, ListChecks } from "@lucide/vue";
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { SidebarProps } from "frappe-ui";
+import { ArrowLeft, LayoutGrid, ListChecks } from "@lucide/vue";
 
 type SidebarSectionProps = NonNullable<
   SidebarProps["sections"]

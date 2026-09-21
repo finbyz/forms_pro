@@ -11,6 +11,7 @@ import FieldCard from "@/components/builder/FieldCard.vue";
 import RowDropZone from "@/components/builder/RowDropZone.vue";
 import ColumnDropZone from "@/components/builder/ColumnDropZone.vue";
 import SectionNavBar from "@/components/builder/SectionNavBar.vue";
+import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
 
 const editFormStore = useEditForm();
 
@@ -169,16 +170,23 @@ onClickOutside(fieldContentRef, (event) => {
 </script>
 
 <template>
-    <div class="flex flex-col items-center flex-1 min-w-0 overflow-y-auto bg-surface-gray-1 px-6 pt-6 pb-40">
+    <div class="flex flex-col flex-1 min-w-0 h-full overflow-y-auto bg-surface-gray-1">
         <div v-if="editFormStore.isLoading" class="flex items-center justify-center h-full">
             <LoadingIndicator />
         </div>
         <template v-else>
-            <SectionNavBar v-if="editFormStore.formData" class="max-w-[960px] w-full mb-6" />
+            <div class="flex-none flex justify-center w-full bg-surface-gray-1 pt-6 px-6 pb-2">
+                <SectionNavBar v-if="editFormStore.formData" class="max-w-[960px] w-full" />
+            </div>
+            
+            <div v-if="editFormStore.formData && editFormStore.activeSectionIndex === 'success'" class="flex-1 w-full overflow-hidden bg-white">
+                <SuccessCanvas />
+            </div>
+
             <div
-                v-if="editFormStore.formData"
+                v-else-if="editFormStore.formData"
                 ref="fieldContentRef"
-                class="bg-surface-base max-w-[960px] w-full border border-outline-gray-1 rounded-6 shadow-sm"
+                class="flex-1 w-full max-w-[960px] mx-auto bg-surface-base border border-outline-gray-1 rounded-6 shadow-sm my-4 mb-40"
             >
                 <div class="p-8">
                     <div class="flex flex-col gap-3 mb-8">

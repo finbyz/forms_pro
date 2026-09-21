@@ -7,8 +7,8 @@ import {
     type Condition,
     Actions,
 } from "@/types/conditional-render.types";
-import { EllipsisVertical, Trash, Workflow, Zap } from "@lucide/vue";
 import { FormControl, Popover } from "frappe-ui";
+import { EllipsisVertical, Trash, Plus } from "@lucide/vue";
 import type { FormField } from "@/types/formfield";
 
 const editFormStore = useEditForm();
@@ -141,7 +141,7 @@ const showValueInput = (operator: ConditionalOperators) => {
             >
                 <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2 text-ink-gray-5 text-sm">
-                        <Workflow class="w-4 h-4" />
+                        <span class="lucide-workflow w-4 h-4" aria-hidden="true" />
                         <span>When</span>
                     </div>
                     <Popover>
@@ -196,7 +196,7 @@ const showValueInput = (operator: ConditionalOperators) => {
 
             <!-- Actions -->
             <div class="flex items-center gap-2 text-ink-gray-5 text-sm">
-                <Zap class="w-4 h-4" />
+                <span class="lucide-zap w-4 h-4" aria-hidden="true" />
                 <span>Then</span>
             </div>
             <FormControl
@@ -219,7 +219,7 @@ const showValueInput = (operator: ConditionalOperators) => {
             variant="outline"
             size="sm"
             @click="addCondition"
-            icon="plus"
+            :icon="Plus"
             tooltip="Add Condition"
         />
     </div>

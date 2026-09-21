@@ -3,9 +3,12 @@ import { useEditForm } from "@/stores/editForm";
 import { FormControl } from "frappe-ui";
 import { FormField } from "@/types/formfield";
 import { FIELD_TYPE_DEFINITIONS } from "@/config/fieldTypes";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { Component } from "vue";
 import ConditionalLogicSection from "./ConditionalLogicSection.vue";
+
+const activeTab = ref("General");
+const tabs = ["General", "Validation", "Logic"];
 
 const editFormStore = useEditForm();
 
@@ -145,23 +148,45 @@ const fieldProperties = computed(() => {
         },
     ] as FieldProperty[];
 });
+
+const groupedProperties = computed(() => {
+    return {
+        General: fieldProperties.value.filter(p => ["label", "fieldname", "fieldtype", "description"].includes(p.fieldname)),
+        Validation: fieldProperties.value.filter(p => ["reqd", "hidden", "default", "options"].includes(p.fieldname)),
+        Logic: fieldProperties.value.filter(p => ["conditional_logic", "field_key", "source_type", "target_field", "mapping_type"].includes(p.fieldname)),
+    };
+});
 </script>
 <template>
     <div
-        class="flex flex-col gap-6 p-4 w-full"
+        class="flex flex-col w-full h-full"
         data-form-builder-component="field-properties-form"
     >
-        <h3 class="text-lg font-medium">Edit Properties</h3>
-        <hr />
-        <template v-if="editFormStore.selectedField">
-            <template v-for="property in fieldProperties" :key="property.fieldname">
-                <component
-                    v-if="property.visible !== false"
-                    :is="property.component"
-                    v-model="editFormStore.selectedField[property.fieldname]"
-                    v-bind="property.props"
-                />
+        <!-- Tabs -->
+        <div class="flex items-center w-full px-4 pt-4 border-b border-outline-gray-1 shrink-0 gap-4">
+            <button
+                v-for="tab in tabs"
+                :key="tab"
+                class="pb-2 text-sm font-medium transition-colors border-b-2 relative -mb-[1px]"
+                :class="activeTab === tab ? 'border-ink-gray-9 text-ink-gray-9' : 'border-transparent text-ink-gray-5 hover:text-ink-gray-7'"
+                @click="activeTab = tab"
+            >
+                {{ tab }}
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+            <template v-if="editFormStore.selectedField">
+                <template v-for="property in groupedProperties[activeTab as keyof typeof groupedProperties]" :key="property.fieldname">
+                    <component
+                        v-if="property.visible !== false"
+                        :is="property.component"
+                        v-model="editFormStore.selectedField[property.fieldname]"
+                        v-bind="property.props"
+                    />
+                </template>
             </template>
-        </template>
+        </div>
     </div>
 </template>

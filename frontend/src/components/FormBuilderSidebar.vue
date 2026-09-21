@@ -1,29 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { Tooltip, Button } from "frappe-ui";
 import AddFieldsSection from "@/components/builder/sidebar/AddFieldsSection.vue";
 import SettingsSection from "@/components/builder/sidebar/SettingsSection.vue";
 import DocTypeFieldsSection from "@/components/builder/sidebar/DoctypeFieldsSection.vue";
 
 const sidebarSections = [
     {
-        id: "settings",
-        label: "Settings",
-        icon: "lucide-settings",
-        section: SettingsSection,
-    },
-    {
         id: "add-fields",
-        label: "Add Fields",
-        icon: "lucide-plus",
+        label: "Fields",
         section: AddFieldsSection,
     },
     {
         id: "doctype-fields",
-        label: "DocType Fields",
-        icon: "lucide-stretch-horizontal",
+        label: "DocType",
         section: DocTypeFieldsSection,
     },
+    {
+        id: "settings",
+        label: "Logic",
+        section: SettingsSection,
+    }
 ];
 
 const activeSection = ref(
@@ -37,58 +33,43 @@ const activePanelId = computed(() => panelId(activeSection.value.id));
 </script>
 <template>
     <div
-        class="h-full w-[320px] border-r border-outline-gray-1 flex bg-surface-base"
+        class="h-full w-[300px] border-r border-outline-gray-1 flex flex-col bg-surface-base shrink-0"
         data-form-builder-component="form-builder-sidebar"
     >
-        <!-- Tab Navigation -->
+        <!-- Tab Navigation (Horizontal) -->
         <div
             role="tablist"
             aria-label="Form builder sections"
-            aria-orientation="vertical"
-            class="h-full flex flex-col gap-1 p-3 border-r border-outline-gray-1 shrink-0 bg-surface-base"
+            class="flex items-center w-full px-4 pt-4 border-b border-outline-gray-1 bg-surface-base gap-4"
         >
-            <Tooltip
+            <button
                 v-for="section in sidebarSections"
                 :key="section.id"
-                :text="section.label"
-                placement="right"
+                role="tab"
+                :id="tabId(section.id)"
+                :aria-selected="activeSection.id === section.id"
+                :aria-controls="panelId(section.id)"
+                class="pb-2 text-sm font-medium transition-colors border-b-2 relative -mb-[1px]"
+                :class="activeSection.id === section.id ? 'border-ink-gray-9 text-ink-gray-9' : 'border-transparent text-ink-gray-5 hover:text-ink-gray-7'"
+                @click="activeSection = section"
             >
-                <div class="relative">
-                    <span
-                        v-if="activeSection.id === section.id"
-                        aria-hidden="true"
-                        class="absolute -left-3 top-1/2 -translate-y-1/2 h-8 w-1 rounded-full bg-surface-gray-9"
-                    />
-                    <Button
-                        size="md"
-                        role="tab"
-                        :id="tabId(section.id)"
-                        :aria-label="section.label"
-                        :aria-selected="activeSection.id === section.id"
-                        :aria-controls="panelId(section.id)"
-                        @click="activeSection = section"
-                        :variant="activeSection.id === section.id ? 'subtle' : 'ghost'"
-                        theme="gray"
-                        class="w-full justify-center active:scale-98 transition-base"
-                        :icon="section.icon"
-                    />
-                </div>
-            </Tooltip>
+                {{ section.label }}
+            </button>
         </div>
 
-        <!-- Tab Content -->
-        <div
-            role="tabpanel"
-            :id="activePanelId"
-            :aria-labelledby="activeTabId"
-            tabindex="0"
-            class="flex flex-col flex-1 min-w-0 overflow-y-auto overflow-x-hidden focus:outline-none focus-visible:focus-ring"
-        >
-            <div class="p-6 space-y-6">
-                <Transition name="section-fade" mode="out-in">
-                    <component :is="activeSection.section" :key="activeSection.id" />
-                </Transition>
-            </div>
+        <!-- Tab Content Panels -->
+        <div class="flex-1 overflow-y-auto">
+            <template v-for="section in sidebarSections" :key="section.id">
+                <div
+                    v-show="activeSection.id === section.id"
+                    role="tabpanel"
+                    :id="panelId(section.id)"
+                    :aria-labelledby="tabId(section.id)"
+                    class="h-full p-4"
+                >
+                    <component :is="section.section" />
+                </div>
+            </template>
         </div>
     </div>
 </template>

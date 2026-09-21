@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { Button } from "frappe-ui";
+import { Button, createResource } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
 import { useRouter } from "vue-router";
-import { Copy, Archive } from "@lucide/vue";
+import { toast } from "vue-sonner";
 
 const editFormStore = useEditForm();
 const router = useRouter();
@@ -15,19 +15,21 @@ async function duplicateForm() {
     if (!name) return;
     duplicating.value = true;
     try {
-        const res = await (window as any).frappe.call({
-            method: "forms_pro.api.v1.builder.data.duplicate_form",
-            type: "POST",
-            args: { form_name: name },
-        });
-        const newName = res.message?.name;
-        const newTitle = res.message?.title;
+        const res = await createResource({
+            url: "forms_pro.api.v1.builder.data.duplicate_form",
+            method: "POST",
+            makeParams() {
+                return { form_name: name };
+            }
+        }).submit();
+        const newName = res?.name;
+        const newTitle = res?.title;
         if (newName) {
-            (window as any).frappe.show_alert({ message: `"${newTitle}" created.`, indicator: "green" });
+            toast.success(`"${newTitle}" created.`);
             router.push({ name: "Edit Form", params: { id: newName } });
         }
     } catch {
-        (window as any).frappe.show_alert({ message: "Duplication failed.", indicator: "red" });
+        toast.error("Duplication failed.");
     } finally {
         duplicating.value = false;
     }
@@ -38,15 +40,17 @@ async function archiveForm() {
     if (!name || !confirm("Archive this form? It will be hidden from public routes.")) return;
     archiving.value = true;
     try {
-        await (window as any).frappe.call({
-            method: "forms_pro.api.v1.builder.data.archive_form",
-            type: "POST",
-            args: { form_name: name },
-        });
-        (window as any).frappe.show_alert({ message: "Form archived.", indicator: "orange" });
+        await createResource({
+            url: "forms_pro.api.v1.builder.data.archive_form",
+            method: "POST",
+            makeParams() {
+                return { form_name: name };
+            }
+        }).submit();
+        toast.warning("Form archived.");
         router.push({ name: "Home" });
     } catch {
-        (window as any).frappe.show_alert({ message: "Archive failed.", indicator: "red" });
+        toast.error("Archive failed.");
     } finally {
         archiving.value = false;
     }

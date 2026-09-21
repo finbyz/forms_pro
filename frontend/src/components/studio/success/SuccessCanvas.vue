@@ -2,21 +2,7 @@
 import { ref, computed, watch, nextTick } from "vue";
 import { Button, FormControl } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
-import {
-  Plus,
-  Trash2,
-  MoveUp,
-  MoveDown,
-  AlignLeft,
-  Type,
-  Image,
-  SeparatorHorizontal,
-  GripVertical,
-  Link2,
-  ListChecks,
-  ArrowRight,
-  Copy,
-} from "@lucide/vue";
+
 
 const editFormStore = useEditForm();
 
@@ -34,15 +20,15 @@ const draggedId = ref<string | null>(null);
 
 const blockTypes = [
   { type: "icon" as const, label: "Icon", icon: "✓" },
-  { type: "heading" as const, label: "Heading", icon: Type },
-  { type: "paragraph" as const, label: "Text", icon: AlignLeft },
-  { type: "image" as const, label: "Image", icon: Image },
-  { type: "divider" as const, label: "Divider", icon: SeparatorHorizontal },
+  { type: "heading" as const, label: "Heading", icon: "lucide-type" },
+  { type: "paragraph" as const, label: "Text", icon: "lucide-align-left" },
+  { type: "image" as const, label: "Image", icon: "lucide-image" },
+  { type: "divider" as const, label: "Divider", icon: "lucide-separator-horizontal" },
   { type: "spacer" as const, label: "Spacer", icon: "⏎" },
   { type: "button" as const, label: "Button", icon: "→" },
-  { type: "reference" as const, label: "Submission Ref", icon: Link2 },
-  { type: "summary" as const, label: "Response Summary", icon: ListChecks },
-  { type: "steps" as const, label: "Next Steps", icon: ArrowRight },
+  { type: "reference" as const, label: "Submission Ref", icon: "lucide-link-2" },
+  { type: "summary" as const, label: "Response Summary", icon: "lucide-list-checks" },
+  { type: "steps" as const, label: "Next Steps", icon: "lucide-arrow-right" },
 ] as const;
 
 const mergeTags = ["{{ submission_id }}", "{{ form_title }}"];
@@ -163,18 +149,21 @@ const selectedBlock = computed(() => blocks.value.find((b) => b.id === selectedI
     <!-- Left: Block palette -->
     <div class="w-48 border-r bg-white p-4 flex flex-col gap-3">
       <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide">Blocks</h3>
-      <button
+      <Button
         v-for="bt in blockTypes"
         :key="bt.type"
-        class="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-gray-100 transition-colors text-left text-gray-700 w-full"
+        variant="ghost"
+        class="w-full !justify-start !px-2 !py-1.5"
         @click="addBlock(bt.type)"
       >
-        <span class="w-5 h-5 flex items-center justify-center text-gray-500 text-xs">
-          <component v-if="typeof bt.icon !== 'string'" :is="bt.icon" class="w-4 h-4" />
-          <span v-else>{{ bt.icon }}</span>
-        </span>
-        {{ bt.label }}
-      </button>
+        <div class="flex items-center gap-2">
+            <span class="w-5 h-5 flex items-center justify-center text-gray-500 text-xs">
+              <span v-if="bt.icon.startsWith('lucide-')" :class="[bt.icon, 'w-4 h-4']" aria-hidden="true" />
+              <span v-else>{{ bt.icon }}</span>
+            </span>
+            <span class="text-sm text-gray-700 font-normal">{{ bt.label }}</span>
+        </div>
+      </Button>
     </div>
 
     <!-- Center: Canvas -->
@@ -204,7 +193,7 @@ const selectedBlock = computed(() => blocks.value.find((b) => b.id === selectedI
               @click.stop
               @dragstart="onDragStart(block.id)"
             >
-              <GripVertical class="w-4 h-4" />
+              <span class="lucide-grip-vertical w-4 h-4" aria-hidden="true" />
             </button>
 
             <!-- Icon -->
@@ -257,13 +246,13 @@ const selectedBlock = computed(() => blocks.value.find((b) => b.id === selectedI
         <h3 class="text-sm font-semibold">{{ selectedBlock.type }}</h3>
         <div class="flex gap-1">
           <Button variant="ghost" size="sm" @click="moveBlock(selectedBlock.id, -1)" :disabled="blocks[0]?.id === selectedBlock.id">
-            <MoveUp class="w-3.5 h-3.5" />
+            <span class="lucide-move-up w-3 h-3" aria-hidden="true" />
           </Button>
           <Button variant="ghost" size="sm" @click="moveBlock(selectedBlock.id, 1)" :disabled="blocks[blocks.length - 1]?.id === selectedBlock.id">
-            <MoveDown class="w-3.5 h-3.5" />
+            <span class="lucide-move-down w-3 h-3" aria-hidden="true" />
           </Button>
           <Button variant="ghost" size="sm" theme="red" @click="removeBlock(selectedBlock.id)">
-            <Trash2 class="w-3.5 h-3.5" />
+            <span class="lucide-trash-2 w-3 h-3" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -288,15 +277,16 @@ const selectedBlock = computed(() => blocks.value.find((b) => b.id === selectedI
       <div v-if="selectedBlock.type !== 'spacer' && selectedBlock.type !== 'divider' && selectedBlock.type !== 'image'" class="mt-2">
         <label class="text-xs text-gray-500">Merge Tags</label>
         <div class="flex flex-wrap gap-1 mt-1">
-          <button
+          <Button
             v-for="tag in mergeTags"
             :key="tag"
-            class="text-xs px-1.5 py-0.5 bg-gray-100 rounded hover:bg-gray-200"
+            variant="subtle"
+            size="sm"
             @click="insertMergeTag(tag)"
             @mousedown.prevent
           >
             {{ tag }}
-          </button>
+          </Button>
         </div>
       </div>
 

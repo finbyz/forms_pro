@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useSubmissionForm } from "@/stores/submissionForm";
 import { LoadingIndicator, TextEditor } from "frappe-ui";
-import { ArrowLeft } from "@lucide/vue";
 
 const store = useSubmissionForm();
 </script>
@@ -19,7 +18,7 @@ const store = useSubmissionForm();
             @click="store.prevStep"
             class="flex items-center justify-center w-[30px] h-[30px] shrink-0 rounded-lg border border-outline-gray-2 bg-surface-white text-ink-gray-4 hover:border-outline-gray-4 active:scale-95 transition-[border-color,transform] duration-150 cursor-pointer"
         >
-            <ArrowLeft class="w-3.5 h-3.5" :stroke-width="2.2" />
+            <span class="lucide-arrow-left w-3 h-3" aria-hidden="true" />
         </button>
         <div class="flex-1 min-w-0">
             <div class="text-[10.5px] text-ink-gray-4 font-medium tracking-wider uppercase mb-0.5">

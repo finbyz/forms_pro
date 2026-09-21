@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { Button, Badge } from "frappe-ui";
+import { Button, Badge, createResource } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
-import { GitBranch, RotateCw } from "@lucide/vue";
+import { toast } from "vue-sonner";
 
 const editFormStore = useEditForm();
 const versions = ref<any[]>([]);
@@ -15,11 +15,16 @@ async function fetchVersions() {
     if (!formName.value) return;
     loading.value = true;
     try {
-        const res = await (window as any).frappe.call({
-            method: "forms_pro.api.v1.builder.data.get_versions",
-            args: { form_name: formName.value },
+        const resource = createResource({
+            url: "forms_pro.api.v1.builder.data.get_versions",
+            makeParams() {
+                return { form_name: formName.value };
+            },
         });
-        versions.value = res.message?.versions ?? [];
+        await resource.fetch();
+        versions.value = resource.data?.versions ?? [];
+    } catch (e: any) {
+        toast.error(e.message || "Failed to fetch versions");
     } finally {
         loading.value = false;
     }
@@ -29,14 +34,18 @@ async function doRevert(v: any) {
     if (!confirm(`Revert draft to Version ${v.version_number}? Unsaved changes will be lost.`)) return;
     reverting.value = v.name;
     try {
-        await (window as any).frappe.call({
-            method: "forms_pro.api.v1.builder.data.revert_to_version",
-            args: { form_name: formName.value, version_name: v.name },
+        const resource = createResource({
+            url: "forms_pro.api.v1.builder.data.revert_to_version",
+            method: "POST",
+            makeParams() {
+                return { form_name: formName.value, version_name: v.name };
+            },
         });
+        await resource.submit();
         await editFormStore.initialize(formName.value);
-        (window as any).frappe.show_alert({ message: `Reverted to v${v.version_number}`, indicator: "green" });
-    } catch {
-        (window as any).frappe.show_alert({ message: "Revert failed.", indicator: "red" });
+        toast.success(`Reverted to v${v.version_number}`);
+    } catch (e: any) {
+        toast.error(e.message || "Revert failed.");
     } finally {
         reverting.value = null;
     }
@@ -57,7 +66,7 @@ onMounted(fetchVersions);
             </div>
             <Button 
                 variant="ghost" 
-                icon="lucide-refresh-cw" 
+                icon="refresh-cw" 
                 size="sm"
                 :loading="loading" 
                 @click="fetchVersions"
@@ -70,7 +79,7 @@ onMounted(fetchVersions);
             <div class="mx-auto max-w-3xl space-y-5 pb-12 px-6 py-6">
                 <!-- Empty state -->
                 <div v-if="!loading && versions.length === 0" class="flex flex-col items-center py-24 gap-4 text-center">
-                    <GitBranch class="w-12 h-12 text-ink-gray-4" aria-hidden="true" />
+                    <span class="lucide-git-branch w-12 h-12 text-ink-gray-4" aria-hidden="true" />
                     <div>
                         <p class="text-base text-ink-gray-7">No published versions yet</p>
                         <p class="text-sm text-ink-gray-5 mt-1.5">Publish the form to create the first immutable snapshot</p>
@@ -109,7 +118,7 @@ onMounted(fetchVersions);
                         v-if="i > 0" 
                         variant="ghost" 
                         size="sm" 
-                        icon-left="lucide-rotate-ccw"
+                        icon-left="rotate-ccw"
                         label="Revert"
                         :loading="reverting === v.name" 
                         @click="doRevert(v)"

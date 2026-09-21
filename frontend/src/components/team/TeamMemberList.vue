@@ -56,6 +56,13 @@ function handleMemberRemoval(row: TeamMember) {
                 emptyState: {
                     title: 'No Team Members Added',
                     description: 'Add team members to your team to get started',
+                    button: {
+                        label: 'Invite Member',
+                        variant: 'solid',
+                        onClick: () => {
+                            openInviteMemberDialog = true;
+                        },
+                    },
                 },
             }"
             row-key="email"

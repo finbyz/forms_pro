@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { FormStep } from "@/composables/useFormSteps";
-import { Check } from "@lucide/vue";
 
 defineProps<{
     steps: FormStep[];
@@ -36,11 +35,7 @@ const emit = defineEmits<{
                             'shadow-[0_0_0_5px_rgba(10,10,10,0.08)]': idx === currentIndex,
                         }"
                     >
-                        <Check
-                            v-if="idx < currentIndex"
-                            class="w-3 h-3 text-ink-white animate-check-in"
-                            :stroke-width="2.5"
-                        />
+                        <span v-if="idx < currentIndex" class="lucide-check w-3 h-3 text-ink-white" aria-hidden="true" />
                         <span
                             v-else
                             class="text-xs font-bold leading-none"

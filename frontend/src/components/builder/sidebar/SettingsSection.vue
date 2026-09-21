@@ -3,7 +3,6 @@ import { Checkbox, Dialog, FormControl, TextEditor, Tooltip } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
 import { validateFormRoute } from "@/utils/form_generator";
 import { ref, watch } from "vue";
-import { CircleCheck } from "@lucide/vue";
 
 const editFormStore = useEditForm();
 
@@ -67,7 +66,7 @@ const inExpandedDescription = ref(false);
                         Route already exists
                     </span>
                     <span v-else class="text-green-500 flex items-center gap-1">
-                        <CircleCheck class="w-4 h-4" /> Route is available</span
+                        <span class="lucide-circle-check w-4 h-4" aria-hidden="true" /> Route is available</span
                     >
                 </div>
                 <Tooltip

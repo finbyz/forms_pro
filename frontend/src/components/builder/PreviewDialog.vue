@@ -7,6 +7,7 @@ import Heading from "@/components/fields/Heading.vue";
 import PageBreak from "@/components/fields/PageBreak.vue";
 import { useGroupedRows } from "@/composables/useGroupedRows";
 import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
+import { Monitor, Tablet, Smartphone, RotateCw } from "@lucide/vue";
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: "close"): void }>();
@@ -14,9 +15,9 @@ const emit = defineEmits<{ (e: "close"): void }>();
 const editFormStore = useEditForm();
 
 const MODES = [
-  { key: "desktop", label: "Desktop", icon: "lucide-monitor", width: "100%" },
-  { key: "tablet", label: "Tablet", icon: "lucide-tablet", width: "768px" },
-  { key: "mobile", label: "Mobile", icon: "lucide-smartphone", width: "375px" },
+  { key: "desktop", label: "Desktop", icon: Monitor, width: "100%" },
+  { key: "tablet", label: "Tablet", icon: Tablet, width: "768px" },
+  { key: "mobile", label: "Mobile", icon: Smartphone, width: "375px" },
 ] as const;
 
 const mode = ref<(typeof MODES)[number]>(MODES[0]);
@@ -52,7 +53,7 @@ const formData = computed(() => editFormStore.formData);
       <div class="flex items-center justify-between w-full">
         <span class="text-lg-semibold text-ink-gray-9">Preview</span>
         <Tooltip text="Rotate" placement="bottom">
-          <Button variant="ghost" size="sm" icon="lucide-rotate-cw" @click="isLandscape = !isLandscape" />
+          <Button variant="ghost" size="sm" :icon="RotateCw" @click="isLandscape = !isLandscape" />
         </Tooltip>
       </div>
     </template>

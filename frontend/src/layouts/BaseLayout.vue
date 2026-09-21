@@ -26,7 +26,7 @@
                                     </span>
                                     <span class="text-xs text-ink-gray-5">{{ session.user }}</span>
                                 </div>
-                                <EllipsisVertical class="size-4 text-ink-gray-6" />
+                                <span class="lucide-ellipsis-vertical text-ink-gray-6" aria-hidden="true" />
                             </div>
                         </div>
                     </template>
@@ -40,7 +40,7 @@
                                 theme="red"
                                 @click="session.logout.submit"
                                 label="Log out"
-                                :icon-left="LogOut"
+                                icon-left="log-out"
                             />
                         </div>
                     </template>
@@ -55,7 +55,6 @@
 <script setup lang="ts">
 import { session } from "@/data/session";
 import { Popover, Sidebar, type SidebarProps } from "frappe-ui";
-import { EllipsisVertical, LogOut } from "@lucide/vue";
 import type { PropType } from "vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import TeamSwitcher from "@/components/team/TeamSwitcher.vue";

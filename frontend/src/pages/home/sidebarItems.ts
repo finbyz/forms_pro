@@ -1,7 +1,7 @@
-import { Files, UsersRound } from "@lucide/vue";
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import type { SidebarProps } from "frappe-ui";
+import { Files, UsersRound } from "@lucide/vue";
 
 type SidebarSectionProps = NonNullable<
   SidebarProps["sections"]

@@ -7,7 +7,7 @@ import {
     ErrorMessage,
     Button,
     Avatar as FrappeAvatar,
-    useCall,
+    createResource,
 } from "frappe-ui";
 import { useTeam } from "@/stores/team";
 import { toast } from "vue-sonner";
@@ -42,13 +42,14 @@ function removeInviteEmail(email: string) {
 }
 
 function sendInvitationEmails() {
-    useCall({
-        baseUrl: "/api/v2/method/",
+    createResource({
         url: "forms_pro.api.team.invite_team_members",
         method: "POST",
-        params: {
-            team_id: team.currentTeam?.name,
-            emails: inviteEmails.value,
+        makeParams() {
+            return {
+                team_id: team.currentTeam?.name,
+                emails: inviteEmails.value,
+            };
         },
         onSuccess: () => {
             toast.success("Invitations sent successfully");
@@ -60,7 +61,7 @@ function sendInvitationEmails() {
                 description: error.message,
             });
         },
-    });
+    }).submit();
 }
 
 const open = defineModel<boolean>({ required: true, default: false });

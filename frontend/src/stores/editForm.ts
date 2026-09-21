@@ -25,7 +25,7 @@ export const useEditForm = defineStore("editForm", () => {
   const formResource = ref<any>(null);
   const currentFormId = ref<string | null>(null);
   const selectedField = ref<FormField | null>(null);
-  const activeSectionIndex = ref(0);
+  const activeSectionIndex = ref<number | 'success'>(0);
   const isUnsaved = computed(() => formResource.value?.isDirty || false);
   const isLoading = computed(() => formResource.value?.loading || false);
   const isSaving = computed(
@@ -52,9 +52,10 @@ export const useEditForm = defineStore("editForm", () => {
 
   const isMultiSection = computed(() => sections.value.length > 1);
 
-  const activeSectionFields = computed(
-    () => sections.value[activeSectionIndex.value]?.fields ?? []
-  );
+  const activeSectionFields = computed(() => {
+    if (activeSectionIndex.value === 'success') return [];
+    return sections.value[activeSectionIndex.value as number]?.fields ?? [];
+  });
   const originalFormData = computed(
     () => formResource.value?.originalDoc || null
   );
@@ -360,7 +361,7 @@ export const useEditForm = defineStore("editForm", () => {
     insertFieldAtStepEnd(
       fs,
       newField,
-      activeSectionIndex.value,
+      activeSectionIndex.value === 'success' ? 0 : activeSectionIndex.value as number,
       isMultiSection.value
     );
   }
@@ -385,7 +386,7 @@ export const useEditForm = defineStore("editForm", () => {
     insertFieldAtStepEnd(
       fs,
       _newField,
-      activeSectionIndex.value,
+      activeSectionIndex.value === 'success' ? 0 : activeSectionIndex.value as number,
       isMultiSection.value
     );
   }
@@ -469,7 +470,8 @@ export const useEditForm = defineStore("editForm", () => {
   }
 
   function clampActiveStep() {
-    if (activeSectionIndex.value >= sections.value.length) {
+    if (activeSectionIndex.value === 'success') return;
+    if ((activeSectionIndex.value as number) >= sections.value.length) {
       activeSectionIndex.value = sections.value.length - 1;
     }
   }

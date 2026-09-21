@@ -2,9 +2,11 @@
 import { ref, watch, computed } from "vue";
 import { Button, FormControl, Tooltip, Badge } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
-import { Palette, Type, PaintBucket, Ruler, Square, Save, FolderOpen, AlertTriangle, Eye, Contrast } from "@lucide/vue";
+import { toast } from "vue-sonner";
+import { Monitor, Tablet, Smartphone } from "@lucide/vue";
 
 const editFormStore = useEditForm();
+const previewDevice = ref<"desktop" | "tablet" | "mobile">("desktop");
 
 interface ThemeTokens {
   font_family: string;
@@ -55,13 +57,14 @@ watch(() => editFormStore.formData, (data) => {
 watch(tokens, () => {
   if (editFormStore.formResource?.doc) {
     editFormStore.formResource.doc.theme_overrides_json = JSON.stringify(tokens.value);
+    editFormStore.triggerAutosave();
   }
 }, { deep: true });
 
 const sections = [
   {
     label: "Typography",
-    icon: Type,
+    icon: "lucide-type",
     fields: [
       { key: "font_family" as const, label: "Font Family", type: "select", options: ["Inter", "Roboto", "Open Sans", "Poppins", "Montserrat", "Nunito", "Source Sans Pro"] },
       { key: "font_size" as const, label: "Font Size", type: "select", options: ["14px", "15px", "16px", "17px", "18px", "20px"] },
@@ -69,7 +72,7 @@ const sections = [
   },
   {
     label: "Colors",
-    icon: PaintBucket,
+    icon: "lucide-paint-bucket",
     fields: [
       { key: "text_color" as const, label: "Text", type: "color" },
       { key: "muted_text_color" as const, label: "Muted Text", type: "color" },
@@ -82,7 +85,7 @@ const sections = [
   },
   {
     label: "Shape & Spacing",
-    icon: Ruler,
+    icon: "lucide-ruler",
     fields: [
       { key: "input_radius" as const, label: "Input Radius", type: "select", options: ["4px", "6px", "8px", "10px", "12px", "16px", "24px", "9999px"] },
       { key: "button_radius" as const, label: "Button Radius", type: "select", options: ["4px", "6px", "8px", "10px", "12px", "16px", "24px", "9999px"] },
@@ -106,12 +109,12 @@ function saveTheme() {
   const existing = JSON.parse(localStorage.getItem("forms_pro_themes") || "[]");
   existing.push(theme);
   localStorage.setItem("forms_pro_themes", JSON.stringify(existing));
-  (window as any).frappe?.show_alert?.({ message: "Theme saved", indicator: "green" });
+  toast.success("Theme saved");
 }
 
 function loadTheme(theme: any) {
   tokens.value = { ...defaults, ...theme.tokens };
-  (window as any).frappe?.show_alert?.({ message: "Theme loaded", indicator: "green" });
+  toast.success("Theme loaded");
 }
 
 const savedThemes = computed(() => {
@@ -203,10 +206,10 @@ function importTheme(file: File) {
       const theme = JSON.parse(e.target?.result as string);
       if (theme.tokens) {
         tokens.value = { ...defaults, ...theme.tokens };
-        (window as any).frappe?.show_alert?.({ message: "Theme imported", indicator: "green" });
+        toast.success("Theme imported");
       }
     } catch {
-      (window as any).frappe?.show_alert?.({ message: "Invalid theme file", indicator: "red" });
+      toast.error("Invalid theme file");
     }
   };
   reader.readAsText(file);
@@ -224,13 +227,13 @@ function importTheme(file: File) {
         </div>
         <div class="flex gap-1">
           <Tooltip text="Save Theme" placement="bottom">
-            <Button variant="ghost" size="sm" @click="saveTheme"><Save class="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" @click="saveTheme"><span class="lucide-save w-3 h-3" aria-hidden="true" /></Button>
           </Tooltip>
           <Tooltip text="Export Theme" placement="bottom">
-            <Button variant="ghost" size="sm" @click="exportTheme"><FolderOpen class="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" @click="exportTheme"><span class="lucide-folder-open w-3 h-3" aria-hidden="true" /></Button>
           </Tooltip>
           <Tooltip text="Reset to Defaults" placement="bottom">
-            <Button variant="ghost" size="sm" @click="resetTheme"><Eye class="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" @click="resetTheme"><span class="lucide-eye w-3 h-3" aria-hidden="true" /></Button>
           </Tooltip>
         </div>
       </div>
@@ -240,7 +243,7 @@ function importTheme(file: File) {
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-gray-500 uppercase">Saved Themes</span>
           <input type="file" accept=".json" @change="importTheme($event.target.files[0])" class="hidden" ref="fileInput" />
-          <Button variant="ghost" size="sm" @click="$refs.fileInput?.click()"><Contrast class="w-3.5 h-3.5" /></Button>
+          <Button variant="ghost" size="sm" @click="$refs.fileInput?.click()"><span class="lucide-contrast w-3 h-3" aria-hidden="true" /></Button>
         </div>
         <div class="flex flex-wrap gap-1">
           <button
@@ -258,7 +261,7 @@ function importTheme(file: File) {
       <!-- Contrast Warnings -->
       <div v-if="contrastWarnings.some(w => w.level === 'fail')" class="p-3 bg-red-50 border border-red-200 rounded-lg">
         <div class="flex items-center gap-2 text-xs text-red-700 mb-2">
-          <AlertTriangle class="w-4 h-4" />
+          <span class="lucide-alert-triangle w-4 h-4" aria-hidden="true" />
           <span class="font-medium">Contrast Issues</span>
         </div>
         <div class="flex flex-col gap-1 text-xs">
@@ -273,7 +276,7 @@ function importTheme(file: File) {
       <!-- Theme Settings -->
       <div v-for="section in sections" :key="section.label" class="flex flex-col gap-3">
         <div class="flex items-center gap-2 pt-2 border-t">
-          <component :is="section.icon" class="w-4 h-4 text-gray-400" />
+          <span :class="[section.icon, 'w-4 h-4 text-gray-400']" aria-hidden="true" />
           <span class="text-xs font-semibold text-gray-500 uppercase">{{ section.label }}</span>
         </div>
         <div v-for="field in section.fields" :key="field.key" class="flex items-center gap-2">
@@ -299,11 +302,26 @@ function importTheme(file: File) {
     </div>
 
     <!-- Right: Live preview -->
-    <div class="flex-1 p-6 overflow-auto flex justify-center">
+    <div class="flex-1 bg-gray-50 flex flex-col relative overflow-hidden">
+      <!-- Top header for live preview -->
+      <div class="h-14 border-b bg-white flex items-center justify-between px-6 shrink-0">
+        <div class="flex items-center gap-2 text-sm text-gray-500 font-medium">
+          <span class="lucide-eye w-4 h-4" aria-hidden="true" />
+          Live Preview
+        </div>
+        <div class="flex items-center gap-1">
+          <!-- Device Toggles -->
+          <Button :variant="previewDevice === 'desktop' ? 'solid' : 'ghost'" :theme="previewDevice === 'desktop' ? 'gray' : ''" size="sm" :icon="Monitor" @click="previewDevice = 'desktop'" />
+          <Button :variant="previewDevice === 'tablet' ? 'solid' : 'ghost'" :theme="previewDevice === 'tablet' ? 'gray' : ''" size="sm" :icon="Tablet" @click="previewDevice = 'tablet'" />
+          <Button :variant="previewDevice === 'mobile' ? 'solid' : 'ghost'" :theme="previewDevice === 'mobile' ? 'gray' : ''" size="sm" :icon="Smartphone" @click="previewDevice = 'mobile'" />
+        </div>
+      </div>
+      
+      <div class="flex-1 p-6 overflow-auto flex justify-center bg-gray-50 transition-all duration-300">
       <div
-        class="w-full rounded-lg border shadow-sm p-6 transition-all"
+        class="w-full rounded-lg border shadow-sm p-6 transition-all duration-300"
         :style="{
-          maxWidth: tokens.form_max_width,
+          maxWidth: previewDevice === 'desktop' ? tokens.form_max_width : previewDevice === 'tablet' ? '768px' : '375px',
           backgroundColor: tokens.background_color,
           fontFamily: tokens.font_family,
           fontSize: tokens.font_size,
@@ -311,21 +329,46 @@ function importTheme(file: File) {
           gap: tokens.field_gap,
         }"
       >
-        <p class="text-xs mb-2" :style="{ color: tokens.muted_text_color }">Live Preview</p>
+        <h1 class="text-3xl font-bold mb-2">{{ editFormStore.formData?.title || 'Untitled Form' }}</h1>
+        <p class="mb-6" :style="{ color: tokens.muted_text_color }">{{ editFormStore.formData?.description || 'Write a description for your form' }}</p>
 
-        <!-- Sample field -->
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">Sample Label</label>
-          <input
-            class="w-full border rounded px-3 py-2 text-sm transition-colors"
-            :style="{
-              borderColor: tokens.input_border_color,
-              borderRadius: tokens.input_radius,
-            }"
-            :onfocus="(e: any) => { e.target.style.borderColor = tokens.input_focus_color; e.target.style.outline = 'none'; e.target.style.boxShadow = '0 0 0 2px ' + tokens.input_focus_color + '33'; }"
-            placeholder="Sample input..."
-            readonly
-          />
+        <div class="flex flex-col gap-5">
+          <div v-for="field in editFormStore.fields" :key="field.fieldname" class="flex flex-col gap-1.5">
+            <label class="text-sm font-medium">
+              {{ field.label }}
+              <span v-if="field.reqd" class="text-red-500">*</span>
+            </label>
+            <input
+              v-if="field.fieldtype !== 'Select' && field.fieldtype !== 'Text Editor'"
+              class="w-full border rounded px-3 py-2 text-sm transition-colors"
+              :style="{
+                borderColor: tokens.input_border_color,
+                borderRadius: tokens.input_radius,
+                backgroundColor: tokens.background_color,
+                color: tokens.text_color,
+              }"
+              :onfocus="(e: any) => { e.target.style.borderColor = tokens.input_focus_color; e.target.style.outline = 'none'; e.target.style.boxShadow = '0 0 0 2px ' + tokens.input_focus_color + '33'; }"
+              :onblur="(e: any) => { e.target.style.borderColor = tokens.input_border_color; e.target.style.boxShadow = 'none'; }"
+              :placeholder="field.placeholder || `Enter your ${field.label.toLowerCase()}`"
+              readonly
+            />
+            <select
+              v-else-if="field.fieldtype === 'Select'"
+              class="w-full border rounded px-3 py-2 text-sm transition-colors appearance-none bg-no-repeat bg-right"
+              style="background-image: url('data:image/svg+xml;utf8,<svg fill=\'%236B7280\' height=\'24\' viewBox=\'0 0 24 24\' width=\'24\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M7 10l5 5 5-5z\'/></svg>');"
+              :style="{
+                borderColor: tokens.input_border_color,
+                borderRadius: tokens.input_radius,
+                backgroundColor: tokens.background_color,
+                color: tokens.text_color,
+              }"
+              :onfocus="(e: any) => { e.target.style.borderColor = tokens.input_focus_color; e.target.style.outline = 'none'; e.target.style.boxShadow = '0 0 0 2px ' + tokens.input_focus_color + '33'; }"
+              :onblur="(e: any) => { e.target.style.borderColor = tokens.input_border_color; e.target.style.boxShadow = 'none'; }"
+              readonly
+            >
+              <option>Select an option</option>
+            </select>
+          </div>
         </div>
 
         <!-- Sample button -->
@@ -363,6 +406,7 @@ function importTheme(file: File) {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </div>

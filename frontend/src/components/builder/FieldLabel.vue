@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Asterisk } from "@lucide/vue";
 
 defineProps<{
     field: {
@@ -25,6 +24,6 @@ const emit = defineEmits<{
             class="bg-transparent border-none outline-none text-base focus:ring-0 w-full px-0 py-1"
         />
         <label class="text-base" v-else>{{ field.label }}</label>
-        <Asterisk v-if="field.reqd" class="w-4 h-4 text-red-400" />
+        <span class="lucide-asterisk w-4 h-4 text-red-400" aria-hidden="true" />
     </div>
 </template>

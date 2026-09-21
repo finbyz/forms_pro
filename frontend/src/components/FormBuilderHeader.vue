@@ -7,7 +7,6 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import Logo from "@/assets/Logo.vue";
 import FormActions from "@/components/studio/actions/FormActions.vue";
 import PreviewDialog from "@/components/builder/PreviewDialog.vue";
-import { ChevronDown, ArrowLeft, CloudCheck, CloudOff, ExternalLink, Play, MoreHorizontal } from "@lucide/vue";
 
 const router = useRouter();
 const editFormStore = useEditForm();
@@ -17,7 +16,7 @@ const props = defineProps<{ activeTab: string }>();
 const emit = defineEmits<{ (e: "update:activeTab", value: string): void }>();
 
 const SUBMISSION_ROUTE_NAME = "Form Submission Page";
-const TABS = ["Build", "Success", "Design", "Settings", "Submissions", "Versions", "Analytics"] as const;
+const TABS = ["Build", "Design", "Settings", "Submissions", "Versions", "Analytics"] as const;
 
 const tabObjects = TABS.map(t => ({ label: t, value: t }));
 const tabIndex = computed({
@@ -35,12 +34,12 @@ type ActionConfig = {
 
 function computeConfig(): ActionConfig {
     if (editFormStore.isUnsaved && editFormStore.isPublished)
-        return { label: "Save and publish", iconLeft: "lucide-globe", variant: "solid", theme: "gray", handler: editFormStore.saveAndPublish };
+        return { label: "Save and publish", iconLeft: "globe", variant: "solid", theme: "gray", handler: editFormStore.saveAndPublish };
     if (editFormStore.isUnsaved)
         return { label: "Save", iconLeft: "", variant: "solid", theme: "gray", handler: editFormStore.save };
     if (editFormStore.isPublished)
         return { label: "Unpublish", iconLeft: "", variant: "subtle", theme: "red", handler: editFormStore.togglePublish };
-    return { label: "Publish", iconLeft: "lucide-globe", variant: "solid", theme: "gray", handler: editFormStore.togglePublish };
+    return { label: "Publish", iconLeft: "globe", variant: "solid", theme: "gray", handler: editFormStore.togglePublish };
 }
 
 const frozenConfig = ref<ActionConfig | null>(null);
@@ -87,7 +86,7 @@ const openFormSubmissionPage = () => {
             aria-label="Navigation menu"
         >
             <Logo />
-            <ChevronDown class="w-5 h-5 text-ink-gray-6" aria-hidden="true" />
+            <span class="lucide-chevron-down w-5 h-5 text-ink-gray-6" aria-hidden="true" />
         </button>
     </template>
     <template #body-main>
@@ -108,10 +107,10 @@ const openFormSubmissionPage = () => {
 <div class="flex items-center gap-3 min-w-0 flex-1">
     <Badge v-if="editFormStore.isUnsaved" variant="subtle" label="Unsaved" theme="amber" size="sm" />
     <Tooltip v-else-if="editFormStore.isPublished" text="Form is published" placement="bottom">
-        <CloudCheck class="w-4 h-4 text-green-600" />
+        <span class="lucide-cloud-check w-4 h-4 text-green-600" aria-hidden="true" />
     </Tooltip>
     <Tooltip v-else text="Form is not published" placement="bottom">
-        <CloudOff class="w-4 h-4 text-gray-500" />
+        <span class="lucide-cloud-off w-4 h-4 text-gray-500" aria-hidden="true" />
     </Tooltip>
                     <h1 class="text-base-semibold text-ink-gray-9 truncate">
                         {{ editFormStore.originalFormData?.title || "Untitled Form" }}
@@ -121,7 +120,7 @@ const openFormSubmissionPage = () => {
                             /{{ editFormStore.originalFormData?.route }}
                         </span>
                         <Tooltip text="Open in new tab" placement="bottom">
-                            <Button variant="ghost" size="sm" icon="lucide-external-link" @click="openFormSubmissionPage" />
+                            <Button variant="ghost" size="sm" icon="external-link" @click="openFormSubmissionPage" />
                         </Tooltip>
                     </div>
                 </div>
@@ -129,12 +128,12 @@ const openFormSubmissionPage = () => {
 
             <div class="flex items-center gap-2 shrink-0">
                 <Tooltip text="Preview" placement="bottom">
-                    <Button variant="ghost" size="sm" icon="lucide-play" @click="showPreview = true" />
+                    <Button variant="ghost" size="sm" icon="play" @click="showPreview = true" />
                 </Tooltip>
                 <Popover>
                     <template #target="{ togglePopover }">
                         <Tooltip text="More actions" placement="bottom">
-                            <Button variant="ghost" size="sm" icon="lucide-more-horizontal" @click="togglePopover" />
+                            <Button variant="ghost" size="sm" icon="more-horizontal" @click="togglePopover" />
                         </Tooltip>
                     </template>
                     <template #body-main>

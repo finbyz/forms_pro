@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { GripVertical, SquareSplitVertical, Trash2 } from "@lucide/vue";
 import { Button } from "frappe-ui";
+import { SquareSplitVertical, Trash2, GripVertical } from "@lucide/vue";
 
 defineProps<{
     isSelected: boolean;

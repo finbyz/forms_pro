@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from "vue";
 import { FormControl } from "frappe-ui";
-import { ChevronDown, ChevronUp } from "@lucide/vue";
 import { onClickOutside } from "@vueuse/core";
 
 export type Country = {
@@ -245,8 +244,8 @@ const handlePhoneNumberChange = (value: string) => {
                                 >{{ selectedCountry?.dialCode }}</span
                             >
                             <div class="flex flex-col ml-auto flex-shrink-0">
-                                <ChevronUp class="w-3 h-3 text-gray-500" />
-                                <ChevronDown class="w-3 h-3 text-gray-500 -mt-1" />
+                                <span class="lucide-chevron-up w-3 h-3 text-gray-500" aria-hidden="true" />
+                                <span class="lucide-chevron-down w-3 h-3 text-gray-500" aria-hidden="true" />
                             </div>
                         </button>
 

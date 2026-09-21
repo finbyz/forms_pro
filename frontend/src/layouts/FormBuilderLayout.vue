@@ -5,14 +5,15 @@ import FormBuilderHeader from "@/components/FormBuilderHeader.vue";
 import FormBuilderSidebar from "@/components/FormBuilderSidebar.vue";
 import FormBuilderContent from "@/components/FormBuilderContent.vue";
 import FieldEditorSidebar from "@/components/FieldEditorSidebar.vue";
-import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
 import ThemeEditor from "@/components/studio/design/ThemeEditor.vue";
 import FormSettings from "@/components/studio/settings/FormSettings.vue";
 import SubmissionsBrowser from "@/components/studio/submissions/SubmissionsBrowser.vue";
 import VersionsHistory from "@/components/studio/versions/VersionsHistory.vue";
 import AnalyticsPanel from "@/components/studio/AnalyticsPanel.vue";
+import { useEditForm } from "@/stores/editForm";
 
 const activeTab = ref("Build");
+const editFormStore = useEditForm();
 
 useKeyboardShortcuts();
 </script>
@@ -23,13 +24,10 @@ useKeyboardShortcuts();
         <div class="flex flex-1 overflow-hidden">
             <template v-if="activeTab === 'Build'">
                 <div class="flex w-full overflow-hidden">
-                    <FormBuilderSidebar />
+                    <FormBuilderSidebar v-if="editFormStore.activeSectionIndex !== 'success'" />
                     <FormBuilderContent />
-                    <FieldEditorSidebar />
+                    <FieldEditorSidebar v-if="editFormStore.activeSectionIndex !== 'success'" />
                 </div>
-            </template>
-            <template v-else-if="activeTab === 'Success'">
-                <SuccessCanvas class="w-full" />
             </template>
             <template v-else-if="activeTab === 'Design'">
                 <ThemeEditor class="w-full" />

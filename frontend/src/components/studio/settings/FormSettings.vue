@@ -2,7 +2,6 @@
 import { ref, watch, computed } from "vue";
 import { Button, FormControl, Badge } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
-import { Settings, Lock, Send, Shield, Eye, ExternalLink, Copy, Code, Globe } from "@lucide/vue";
 
 const editFormStore = useEditForm();
 
@@ -69,6 +68,7 @@ function saveSetting(key: string, value: any) {
   if (editFormStore.formResource?.doc) {
     editFormStore.formResource.doc[key] = value;
     editFormStore.formResource.isDirty = true;
+    editFormStore.triggerAutosave();
   }
 }
 
@@ -112,7 +112,7 @@ ${scriptTag}`;
         <!-- General -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <Settings class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <span class="lucide-settings w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">General</h3>
           </div>
           <div class="space-y-4">
@@ -144,7 +144,7 @@ ${scriptTag}`;
         <!-- Access -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <Lock class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <span class="lucide-lock w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Access</h3>
           </div>
           <div class="space-y-4">
@@ -177,7 +177,7 @@ ${scriptTag}`;
         <!-- Submission -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <Send class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <span class="lucide-send w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Submission</h3>
           </div>
           <div class="space-y-4">
@@ -213,7 +213,7 @@ ${scriptTag}`;
         <!-- Success Redirect (conditional) -->
         <section v-if="local.success_mode === 'Redirect to External URL'" class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <ExternalLink class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <span class="lucide-external-link w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Redirect URL</h3>
           </div>
           <div class="space-y-2">
@@ -232,13 +232,13 @@ ${scriptTag}`;
         <!-- Embed -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <Globe class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <span class="lucide-globe w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Embed</h3>
           </div>
           <div class="space-y-3">
             <div class="flex flex-wrap items-center gap-2">
               <Button 
-                icon-left="lucide-copy" 
+                icon-left="copy" 
                 variant="subtle" 
                 theme="gray" 
                 size="sm" 
@@ -247,7 +247,7 @@ ${scriptTag}`;
                 Copy Link
               </Button>
               <Button 
-                icon-left="lucide-code" 
+                icon-left="code" 
                 variant="subtle" 
                 theme="gray" 
                 size="sm" 
@@ -258,17 +258,6 @@ ${scriptTag}`;
             </div>
             <p class="text-xs text-ink-gray-5">Share this form on any website via embed code or direct link</p>
           </div>
-        </section>
-
-        <!-- Security -->
-        <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
-          <div class="flex items-center gap-2 mb-5">
-            <Shield class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
-            <h3 class="text-base-semibold text-ink-gray-8">Security</h3>
-          </div>
-          <p class="text-sm text-ink-gray-7 leading-relaxed">
-            CAPTCHA and rate limiting are configured globally in Forms Pro Settings. Contact your System Manager to enable additional protections.
-          </p>
         </section>
       </div>
     </div>

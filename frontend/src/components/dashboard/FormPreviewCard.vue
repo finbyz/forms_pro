@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Badge } from "frappe-ui";
-import { FileText } from "@lucide/vue";
 import { computed } from "vue";
 
 const props = defineProps({
@@ -20,7 +19,7 @@ const formattedDate = computed(() => {
         class="flex flex-col gap-2 border rounded p-4 hover:border-gray-400 transition-all duration-300 cursor-pointer"
     >
         <div class="flex flex-col gap-3 text-ink-gray-6">
-            <FileText class="w-5 h-5" />
+            <span class="lucide-file-text w-5 h-5" aria-hidden="true" />
             <h3 class="text-lg font-medium">{{ props.form.title }}</h3>
             <div class="flex gap-2 items-center">
                 <Badge

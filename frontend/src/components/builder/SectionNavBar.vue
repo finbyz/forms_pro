@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from "vue";
-import { Plus, CircleCheck, X } from "@lucide/vue";
 import { Button, TextInput } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
 import { dialog } from "@/utils/dialog";
@@ -91,7 +90,7 @@ function confirmRemoveSection(index: number) {
                 variant="ghost"
                 size="sm"
                 label="Add Step"
-                :icon-left="Plus"
+                icon-left="plus"
                 aria-label="Add Step"
                 tooltip="Click to add a new step to the form"
                 @click="store.addStep()"
@@ -113,15 +112,7 @@ function confirmRemoveSection(index: number) {
                     }"
                 >
                     <template v-if="idx > 0" #suffix>
-                        <X
-                            class="w-3 h-3 cursor-pointer rounded-sm text-ink-gray-4 hover:text-ink-gray-7 focus:outline-none focus-visible:ring-2 focus-visible:ring-outline-gray-3"
-                            role="button"
-                            tabindex="0"
-                            aria-label="Remove step"
-                            @click.stop="confirmRemoveSection(idx)"
-                            @keydown.enter.stop="confirmRemoveSection(idx)"
-                            @keydown.space.stop.prevent="confirmRemoveSection(idx)"
-                        />
+                        <span class="lucide-x w-3 h-3 text-ink-gray-4 text-ink-gray-7" aria-hidden="true" />
                     </template>
                 </Button>
                 <TextInput
@@ -144,16 +135,26 @@ function confirmRemoveSection(index: number) {
                 variant="ghost"
                 size="sm"
                 label="Add Step"
-                :icon="Plus"
+                icon="plus"
                 aria-label="Add Step"
                 tooltip="Click to add a new step to the form"
                 @click="store.addStep()"
             />
         </template>
-        <span class="w-1 h-1 rounded-full bg-outline-gray-3" />
-        <span class="flex items-center gap-1.5 text-sm text-ink-gray-4">
-            <CircleCheck class="w-4 h-4" />
-            Success
-        </span>
+        <Button
+            variant="ghost"
+            size="sm"
+            @click="store.activeSectionIndex = 'success'"
+            :class="{
+                'bg-green-50 text-green-700 hover:bg-green-100': store.activeSectionIndex === 'success',
+                'text-ink-gray-5 hover:bg-surface-gray-2': store.activeSectionIndex !== 'success'
+            }"
+            class="transition-colors"
+        >
+            <span class="flex items-center gap-1.5 px-1">
+                <span class="lucide-circle-check w-4 h-4 text-green-600 text-ink-gray-4" aria-hidden="true" />
+                Success
+            </span>
+        </Button>
     </nav>
 </template>

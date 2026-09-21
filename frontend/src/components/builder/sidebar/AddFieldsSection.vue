@@ -4,7 +4,6 @@ import { formFields, type FormFields } from "@/utils/form_fields";
 import { Fieldtype } from "@/types/FormsPro/form_field.types";
 import { FormControl } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
-import { Star, History, Search, X } from "@lucide/vue";
 
 const search = ref("");
 
@@ -120,7 +119,7 @@ const editFormStore = useEditForm();
             <h3 class="text-lg font-medium">Add Fields</h3>
             <div class="flex-1"></div>
             <div class="flex items-center gap-1">
-                <Search class="w-4 h-4 text-gray-400" />
+                <span class="lucide-search w-4 h-4 text-gray-400" aria-hidden="true" />
                 <FormControl
                     v-model="search"
                     type="search"
@@ -129,7 +128,7 @@ const editFormStore = useEditForm();
                     class="w-48"
                 />
                 <button v-if="search" @click="search = ''" class="text-gray-400 hover:text-gray-600" @click.stop>
-                    <X class="w-4 h-4" />
+                    <span class="lucide-x w-4 h-4" aria-hidden="true" />
                 </button>
             </div>
         </div>
@@ -139,7 +138,7 @@ const editFormStore = useEditForm();
             <div v-if="favoriteFields.length" class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 flex items-center gap-1">
-                        <Star class="w-3.5 h-3.5 text-yellow-500" />
+                        <span class="lucide-star w-3 h-3 text-yellow-500" aria-hidden="true" />
                         Favorites
                     </span>
                 </div>
@@ -154,7 +153,7 @@ const editFormStore = useEditForm();
                         <component :is="field.icon" class="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />
                         <span class="text-sm truncate">{{ field.name }}</span>
                         <button @click.stop="toggleFavorite(field.name)" class="ml-auto text-yellow-500 hover:text-yellow-700" :class="isFavorite(field.name) ? 'fill-current' : ''">
-                            <Star :class="isFavorite(field.name) ? 'fill-current' : ''" class="w-3.5 h-3.5" />
+                            <span class="lucide-star w-3 h-3" aria-hidden="true" />
                         </button>
                     </button>
                 </div>
@@ -164,7 +163,7 @@ const editFormStore = useEditForm();
             <div v-if="recentFields.length && !hasSearch" class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 flex items-center gap-1">
-                        <History class="w-3.5 h-3.5 text-gray-400" />
+                        <span class="lucide-history w-3 h-3 text-gray-400" aria-hidden="true" />
                         Recent
                     </span>
                 </div>
@@ -193,7 +192,7 @@ const editFormStore = useEditForm();
             <div v-if="hasSearch" class="flex flex-col gap-2">
                 <div v-if="favoriteFields.length" class="flex flex-col gap-1">
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">
-                        <Star class="w-3.5 h-3.5 text-yellow-500" /> Favorites
+                        <span class="lucide-star w-3 h-3 text-yellow-500" aria-hidden="true" /> Favorites
                     </span>
                     <button
                         v-for="field in favoriteFields"
@@ -208,7 +207,7 @@ const editFormStore = useEditForm();
                 </div>
                 <div v-if="recentFields.length" class="flex flex-col gap-1">
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">
-                        <History class="w-3.5 h-3.5 text-gray-400" /> Recent
+                        <span class="lucide-history w-3 h-3 text-gray-400" aria-hidden="true" /> Recent
                     </span>
                     <button
                         v-for="field in recentFields"
@@ -249,7 +248,7 @@ const editFormStore = useEditForm();
                         <component :is="field.icon" class="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />
                         <span class="text-sm truncate">{{ field.name }}</span>
                         <button @click.stop="toggleFavorite(field.name)" class="ml-auto" :class="isFavorite(field.name) ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-500'">
-                            <Star :class="isFavorite(field.name) ? 'fill-current' : ''" class="w-3.5 h-3.5" />
+                            <span class="lucide-star w-3 h-3" aria-hidden="true" />
                         </button>
                     </button>
                 </div>
