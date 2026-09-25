@@ -10,13 +10,15 @@ class TestTargetImmutability(FrappeTestCase):
         """
         # Create a fresh, temporary DocType to ensure it has no existing custom fields
         doctype_name = "formspro_test_immutability"
-        if not frappe.db.exists("DocType", doctype_name):
-            doc = frappe.new_doc("DocType")
-            doc.name = doctype_name
-            doc.module = "User Forms"
-            doc.custom = True
-            doc.append("fields", {"fieldname": "dummy_field", "fieldtype": "Data", "label": "Dummy"})
-            doc.insert(ignore_permissions=True)
+        if frappe.db.exists("DocType", doctype_name):
+            frappe.delete_doc("DocType", doctype_name, force=True)
+
+        doc = frappe.new_doc("DocType")
+        doc.name = doctype_name
+        doc.module = "Core"
+        doc.custom = 0
+        doc.append("fields", {"fieldname": "dummy_field", "fieldtype": "Data", "label": "Dummy"})
+        doc.insert(ignore_permissions=True)
             
         # Get the original schema
         frappe.clear_document_cache("DocType", doctype_name)

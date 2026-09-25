@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.share import add_docshare, remove
 
+from forms_pro.services.security import captcha as captcha_service
 from forms_pro.api.user import get_user
 from forms_pro.forms_pro.doctype.form.form import Form
 from forms_pro.utils.constants import FORMS_PRO_SYSTEM_FIELDNAMES, UNSUPPORTED_FRAPPE_FIELDTYPES
@@ -31,10 +32,61 @@ def is_login_required(route: str) -> bool:
 
 @frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
 def get_form_by_route(route: str) -> dict:
+    """
+    The public form.
+
+    Serves the published snapshot (Form.active_version) rather than the draft,
+    so editing a live form does not change what visitors see until it is
+    published again. Falls back to the draft only for forms published before
+    versioning existed, otherwise an older form would go blank.
+    """
     form_id = frappe.db.get_value("Form", {"route": route}, pluck="name")
     if not form_id:
         frappe.throw(_("Form not found"), frappe.DoesNotExistError)
-    return get_form(form_id)
+
+    payload = get_form(form_id)
+
+    active_version = payload.get("active_version")
+    if not active_version:
+        return payload
+
+    published = _published_schema(active_version)
+    if published:
+        payload.update(published)
+
+    return payload
+
+
+def _published_schema(version_name: str) -> dict | None:
+    """Unpack a version snapshot into the shape the renderer expects."""
+    version = frappe.db.get_value(
+        "FP Form Version", version_name, ["schema_json", "theme_json"], as_dict=True
+    )
+    schema_json = version.schema_json if version else None
+    if not schema_json:
+        return None
+
+    try:
+        schema = frappe.parse_json(schema_json)
+    except Exception:
+        frappe.log_error(f"Unreadable schema_json on {version_name}", "Forms Pro publishing")
+        return None
+
+    if not schema.get("fields"):
+        return None
+
+    return {
+        "title": schema.get("title"),
+        "description": schema.get("description"),
+        "fields": schema.get("fields"),
+        "success_title": schema.get("success_title"),
+        "success_description": schema.get("success_description"),
+        "allow_incomplete": schema.get("allow_incomplete"),
+        "login_required": schema.get("login_required"),
+        # Visitors get the theme that was live when this version was published,
+        # not whatever the builder happens to be editing.
+        "theme_overrides_json": version.theme_json or None,
+    }
 
 
 @frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
@@ -54,18 +106,114 @@ def get_form(form_id: str) -> dict:
         "target_doctype": form.target_doctype,
         "success_title": form.success_title,
         "success_description": form.success_description,
+        # The Design and Success tabs write these; without them in the payload
+        # the builder reloads to defaults and the work looks unsaved.
+        "theme_overrides_json": form.get("theme_overrides_json"),
+        "success_schema_json": form.get("success_schema_json"),
+        "success_redirect_url": form.get("success_redirect_url"),
+        # Public key only — the browser needs it to execute reCAPTCHA. The
+        # secret never leaves the server.
+        "captcha_enabled": captcha_service.is_enabled(),
+        "captcha_site_key": captcha_service.get_site_key(),
+        "creation": str(form.creation) if getattr(form, "creation", None) else None,
+        "modified": str(form.modified) if getattr(form, "modified", None) else None,
+        "owner": getattr(form, "owner", None),
+        "modified_by": getattr(form, "modified_by", None),
+        "status": getattr(form, "status", "Published" if form.is_published else "Draft"),
+        "access_mode": getattr(form, "access_mode", "Public"),
+        "record_strategy": getattr(form, "record_strategy", "Create New"),
+        "create_target_fields": getattr(form, "create_target_fields", 0),
+        "login_required": getattr(form, "login_required", 0),
+        "linked_team_id": getattr(form, "linked_team_id", None),
+        "linked_team_name": (
+            frappe.db.get_value("FP Team", form.linked_team_id, "team_name")
+            if getattr(form, "linked_team_id", None)
+            else None
+        ),
+        "theme": getattr(form, "theme", None),
+        "active_version": getattr(form, "active_version", None),
+        "success_mode": getattr(form, "success_mode", "Designed Page"),
     }
 
 
 @frappe.whitelist()
 @require_permission("Form", "read", param="form_id")
 def get_form_for_view(form_id: str) -> dict:
-    """Return the form document for the Manage Form page.
+    """Return the form document for the Manage Form page along with overview statistics.
 
     Requires ``read`` permission on the Form. Returns HTTP 404 when the
     form does not exist and HTTP 403 when the user lacks permission.
     """
-    return get_form(form_id)
+    form_data = get_form(form_id)
+
+    total_submissions = 0
+    submissions_this_week = 0
+    recent_submissions = []
+
+    try:
+        total_submissions = frappe.db.count("FP Form Submission", {"form": form_id})
+    except Exception:
+        total_submissions = 0
+
+    try:
+        seven_days_ago = frappe.utils.add_days(frappe.utils.now(), -7)
+        submissions_this_week = frappe.db.count(
+            "FP Form Submission",
+            {"form": form_id, "creation": [">=", seven_days_ago]},
+        )
+    except Exception:
+        submissions_this_week = 0
+
+    try:
+        subs = frappe.get_all(
+            "FP Form Submission",
+            filters={"form": form_id},
+            fields=["name", "creation", "modified", "status", "owner", "target_doctype", "target_name"],
+            order_by="creation desc",
+            limit=5,
+        )
+        for s in subs:
+            recent_submissions.append({
+                "name": s.name,
+                "creation": str(s.creation) if s.get("creation") else None,
+                "modified": str(s.modified) if s.get("modified") else None,
+                "status": s.get("status") or "Submitted",
+                "owner": s.get("owner"),
+                "target_doctype": s.get("target_doctype"),
+                "target_name": s.get("target_name"),
+            })
+    except Exception:
+        recent_submissions = []
+
+    latest_submission_date = recent_submissions[0]["creation"] if recent_submissions else None
+
+    form_data["overview_stats"] = {
+        "total_submissions": total_submissions,
+        "submissions_this_week": submissions_this_week,
+        "total_fields": len(form_data.get("fields") or []),
+        "latest_submission_date": latest_submission_date,
+        "recent_submissions": recent_submissions,
+    }
+
+    return form_data
+
+
+@frappe.whitelist(methods=["POST"])
+@require_permission("Form", "write", param="form_id")
+def toggle_form_published(form_id: str, is_published: bool | None = None) -> dict:
+    """Toggle or set the published status of a form."""
+    form = frappe.get_doc("Form", form_id)
+    if is_published is None:
+        form.is_published = 0 if form.is_published else 1
+    else:
+        form.is_published = 1 if is_published else 0
+
+    form.status = "Published" if form.is_published else "Draft"
+    form.save(ignore_permissions=True)
+    return {
+        "is_published": form.is_published,
+        "status": form.status,
+    }
 
 
 @frappe.whitelist()
@@ -110,7 +258,22 @@ def get_form_shared_with(form_id: str) -> list[frappe.Any]:
 
     shared_with_responses = []
 
+    # Always include the form owner first
+    if form.owner:
+        owner_user = get_user(form.owner) or {"full_name": form.owner, "user_image": None}
+        shared_with_responses.append({
+            "email": form.owner,
+            "full_name": owner_user.get("full_name") or form.owner,
+            "user_image": owner_user.get("user_image"),
+            "read": True,
+            "write": True,
+            "share": True,
+            "submit": True,
+        })
+
     for user in shared_with:
+        if user["user"] == form.owner:
+            continue
         _user = get_user(user["user"])
         if _user is None:
             continue
@@ -243,3 +406,24 @@ def get_doctype_fields(doctype: str = "") -> list:
         and field.fieldname not in FORMS_PRO_SYSTEM_FIELDNAMES
     ]
     return fields
+
+
+@frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
+def get_languages() -> list[dict]:
+    """
+    Enabled languages, for the Language field.
+
+    Frappe autonames Language by `language_code`, so `value` is the code that
+    gets stored (matching how `User.language` works) and `label` is the native
+    name a visitor recognises. Guest-accessible because public forms need it.
+    """
+    languages = frappe.get_all(
+        "Language",
+        filters={"enabled": 1},
+        fields=["name", "language_name"],
+        order_by="language_name asc",
+        limit_page_length=0,
+    )
+    return [
+        {"value": lang.name, "label": lang.language_name or lang.name} for lang in languages
+    ]

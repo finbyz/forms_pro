@@ -21,40 +21,8 @@ export type FormFieldType = {
   props: Record<string, unknown>;
 };
 
-// Maps Frappe DocType fieldtypes to the equivalent Forms Pro fieldtype.
-// Used when importing fields from an existing DocType into a form.
-export const mapDoctypeFieldForForm = (
-  fieldtype: string
-): string | undefined => {
-  const FRAPPE_TO_FORM_TYPE: Partial<Record<string, Fieldtype>> = {
-    Autocomplete: Fieldtype.DATA,
-    Attach: Fieldtype.ATTACH,
-    "Attach Image": Fieldtype.ATTACH,
-    Check: Fieldtype.CHECKBOX,
-    Currency: Fieldtype.NUMBER,
-    Data: Fieldtype.DATA,
-    Date: Fieldtype.DATE,
-    Datetime: Fieldtype.DATE_TIME,
-    Float: Fieldtype.NUMBER,
-    "HTML Editor": Fieldtype.TEXT_EDITOR,
-    Int: Fieldtype.NUMBER,
-    Link: Fieldtype.LINK,
-    "Long Text": Fieldtype.TEXTAREA,
-    "Markdown Editor": Fieldtype.TEXT_EDITOR,
-    Password: Fieldtype.PASSWORD,
-    Percent: Fieldtype.NUMBER,
-    Phone: Fieldtype.PHONE,
-    Rating: Fieldtype.RATING,
-    Select: Fieldtype.SELECT,
-    "Small Text": Fieldtype.TEXTAREA,
-    Table: Fieldtype.TABLE,
-    Text: Fieldtype.TEXTAREA,
-    "Text Editor": Fieldtype.TEXT_EDITOR,
-    Time: Fieldtype.TIME_PICKER,
-  };
+export { mapDoctypeFieldForForm } from "@/utils/doctype_mapping";
 
-  return FRAPPE_TO_FORM_TYPE[fieldtype];
-};
 
 // Pure layout-grid helpers live in form_layout.ts (unit-testable without
 // pulling in the component registry); re-exported here for existing imports.

@@ -39,6 +39,21 @@ export const useManageForm = defineStore("manageForm", () => {
     () => formAccessResource.data || []
   );
 
+  const overviewStats = computed(() => formData.value?.overview_stats || null);
+  const totalSubmissions = computed<number>(
+    () => formData.value?.overview_stats?.total_submissions ?? 0
+  );
+  const submissionsThisWeek = computed<number>(
+    () => formData.value?.overview_stats?.submissions_this_week ?? 0
+  );
+  const recentSubmissions = computed<any[]>(
+    () => formData.value?.overview_stats?.recent_submissions ?? []
+  );
+  const isPublished = computed<boolean>(
+    () => Boolean(formData.value?.is_published)
+  );
+  const isTogglingPublish = ref(false);
+
   // Check if the current user has share access to the form
   const userHasShareAccess = computed<boolean>(
     () =>
@@ -152,17 +167,54 @@ export const useManageForm = defineStore("manageForm", () => {
     _removeAccess.submit();
   }
 
+  async function togglePublish() {
+    if (!currentFormId.value || isTogglingPublish.value) return;
+    isTogglingPublish.value = true;
+    try {
+      const res = await createResource({
+        url: "forms_pro.api.form.toggle_form_published",
+        method: "POST",
+        makeParams() {
+          return {
+            form_id: currentFormId.value,
+          };
+        },
+      }).submit();
+
+      if (formData.value && res) {
+        formData.value.is_published = res.is_published;
+        formData.value.status = res.status;
+      }
+      toast.success(
+        res?.is_published
+          ? "Form published successfully"
+          : "Form unpublished successfully"
+      );
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update form publish status");
+    } finally {
+      isTogglingPublish.value = false;
+    }
+  }
+
   return {
     initialize,
     addAccess,
     setPermission,
     removeAccess,
+    togglePublish,
+    isTogglingPublish,
     userHasShareAccess,
     formOwner,
     sharedAccessUsers,
     currentFormId,
     formData,
     formFields,
+    overviewStats,
+    totalSubmissions,
+    submissionsThisWeek,
+    recentSubmissions,
+    isPublished,
     formAccessResource,
   };
 });

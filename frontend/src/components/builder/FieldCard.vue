@@ -23,6 +23,19 @@ const canEject = computed(
         ).length > 1
 );
 
+// Enabled when there is a row directly above to join.
+const canMergeUp = computed(() => {
+    const row = props.field.row_index ?? 0;
+    if (row <= 0) return false;
+    return editFormStore.fields.some(
+        (f: FormField) => f !== props.field && (f.row_index ?? 0) === row - 1
+    );
+});
+
+function mergeWithAbove() {
+    editFormStore.moveBesideAbove(props.field);
+}
+
 function ejectToOwnRow() {
     editFormStore.insertNewRow(props.field, (props.field.row_index ?? 0) + 1);
 }
@@ -44,8 +57,10 @@ function ejectToOwnRow() {
             :isSelected="editFormStore.selectedField === props.field"
             :isDraggingAnyField="props.isDraggingAnyField"
             :canEject="canEject"
+            :canMergeUp="canMergeUp"
             @remove="editFormStore.removeField(props.field)"
             @eject="ejectToOwnRow"
+            @mergeUp="mergeWithAbove"
         />
         <FieldRenderer
             :field="props.field"

@@ -1,11 +1,13 @@
 import { defineStore } from "pinia";
-import { ref, computed, watch, onUnmounted } from "vue";
+import { ref, computed, watch, onUnmounted, nextTick } from "vue";
 import { createDocumentResource, createResource } from "frappe-ui";
 import {
   mapDoctypeFieldForForm,
   scrubFieldname,
   compact,
+  isDisplayOnly,
 } from "@/utils/form_fields";
+import { placeBesideAbove } from "@/utils/form_layout";
 import {
   groupFieldsIntoSteps,
   insertFieldAtStepEnd,
@@ -36,6 +38,14 @@ export const useEditForm = defineStore("editForm", () => {
   );
 
   const doctypeFields = ref<any>([]);
+
+  // True while a field is being dragged from anywhere — the canvas, the
+  // Add Fields palette or the DocType list. The drop zones are invisible
+  // unless this is set, so every drag source has to flip it.
+  const isDraggingField = ref(false);
+  function setDragging(value: boolean) {
+    isDraggingField.value = value;
+  }
 
   const isError = computed(() => formResource.value?.error || false);
   const formData = computed(() => formResource.value?.doc || null);
@@ -125,7 +135,8 @@ export const useEditForm = defineStore("editForm", () => {
     autosaveTimer = setTimeout(async () => {
       if (!formResource.value) return;
       try {
-        await save();
+        // Autosave is background work — only failures are worth interrupting for.
+        await save(undefined, true);
       } catch {
         // silent fail — user can still manually save
       }
@@ -193,7 +204,7 @@ export const useEditForm = defineStore("editForm", () => {
           return data.map((field: any) => {
             return {
               ...field,
-              fieldtype: mapDoctypeFieldForForm(field.fieldtype),
+              fieldtype: mapDoctypeFieldForForm(field.fieldtype, field.options),
             };
           });
         },
@@ -207,6 +218,8 @@ export const useEditForm = defineStore("editForm", () => {
   function initialize(formId: string) {
     if (formId !== currentFormId.value) {
       currentFormId.value = formId;
+      // Suppressed until the document has hydrated; see onSuccess below.
+      skipSnapshot = true;
       formResource.value = createDocumentResource({
         doctype: "Form",
         name: formId,
@@ -219,7 +232,16 @@ export const useEditForm = defineStore("editForm", () => {
         onSuccess: () => {
           getDoctypeFields();
           enableDirtyGuard();
-          snapshot();
+          refreshPublishState();
+          // The deep watcher on doc.fields fires once as the document
+          // hydrates, which otherwise schedules an autosave the moment the
+          // builder opens -- the user sees "Saving..." without having touched
+          // anything. Re-arm only after that first firing has passed.
+          nextTick(() => {
+            skipSnapshot = false;
+            cancelAutosave();
+            snapshot(); // baseline for undo
+          });
         },
       });
     }
@@ -234,6 +256,21 @@ export const useEditForm = defineStore("editForm", () => {
   function reset() {
     currentFormId.value = null;
     formResource.value = null;
+  }
+
+  /**
+   * Form Field has reqd=1 on both label and fieldname, and autosave fires as
+   * soon as a field is added — so a field created with an empty label throws a
+   * mandatory error before the user can type anything. Give it a unique
+   * placeholder label up front.
+   */
+  function uniqueDefaultLabel(fieldtype: Fieldtype): string {
+    const fs: FormField[] = formResource.value?.doc?.fields ?? [];
+    const taken = new Set(fs.map((f: FormField) => (f.label ?? "").trim()));
+    if (!taken.has(fieldtype)) return fieldtype;
+    let n = 2;
+    while (taken.has(`${fieldtype} ${n}`)) n++;
+    return `${fieldtype} ${n}`;
   }
 
   function findDuplicateFieldnames(): { label: string; fieldname: string }[] {
@@ -259,9 +296,68 @@ export const useEditForm = defineStore("editForm", () => {
     return duplicates;
   }
 
-  async function save() {
+  /**
+   * Autosave, the Save button and publish all write the same document. When two
+   * of them overlap the second sends a stale `modified` and Frappe rejects it
+   * with TimestampMismatchError, so saves are serialized and retried once
+   * against a refreshed timestamp.
+   */
+  let inFlightSave: Promise<unknown> | null = null;
+
+  async function refreshModifiedTimestamp(): Promise<void> {
+    const id = currentFormId.value;
+    if (!id || !formResource.value?.doc) return;
+    const latest = createResource({
+      url: "frappe.client.get_value",
+      params: { doctype: "Form", filters: { name: id }, fieldname: "modified" },
+    });
+    await latest.fetch();
+    if (latest.data?.modified) {
+      formResource.value.doc.modified = latest.data.modified;
+    }
+  }
+
+  function isTimestampMismatch(error: any): boolean {
+    return (
+      error?.exc_type === "TimestampMismatchError" ||
+      /TimestampMismatchError|Document has been modified/i.test(
+        error?.message ?? ""
+      )
+    );
+  }
+
+  async function persist(successMessage?: string, silent = false): Promise<unknown> {
+    const submit = () => formResource.value.setValue.submit(formResource.value.doc);
+
+    try {
+      const result = await submit();
+      if (!silent) toast.success(successMessage ?? "Form Updated Successfully");
+      return result;
+    } catch (error: any) {
+      if (isTimestampMismatch(error)) {
+        // Someone (usually our own autosave) got there first. Our in-memory
+        // document is the newer one, so re-stamp it and write again.
+        await refreshModifiedTimestamp();
+        const result = await submit();
+        if (!silent) toast.success(successMessage ?? "Form Updated Successfully");
+        return result;
+      }
+      toast.error("Failed to Update Form", { description: error?.message });
+      throw error;
+    }
+  }
+
+  async function save(successMessage?: string, silent = false) {
+    if (inFlightSave) {
+      // Wait for the running save so we build on its timestamp, not a stale one.
+      try {
+        await inFlightSave;
+      } catch {
+        // the originating call reports its own failure
+      }
+    }
+
     if (!isUnsaved.value) {
-      toast.info("No changes to save");
       return;
     }
 
@@ -288,23 +384,31 @@ export const useEditForm = defineStore("editForm", () => {
       return Promise.reject(new Error("Duplicate fieldnames"));
     }
 
+    const usedFieldnames = new Set<string>();
     formResource.value.doc.fields.forEach((field: FormField, index: number) => {
       field.idx = index + 1;
-      if (!field.fieldname || field.fieldname.trim() === "") {
-        field.fieldname = scrubFieldname(field.label);
+      if (!field.label || !field.label.trim()) {
+        field.label = uniqueDefaultLabel(field.fieldtype);
       }
+      if (!field.fieldname || field.fieldname.trim() === "") {
+        // scrubFieldname("") is "", which trips the doctype's reqd fieldname.
+        const base = scrubFieldname(field.label) || "field";
+        let candidate = base;
+        let n = 2;
+        while (usedFieldnames.has(candidate)) candidate = `${base}_${n++}`;
+        field.fieldname = candidate;
+      }
+      usedFieldnames.add(field.fieldname);
     });
 
-    return formResource.value.setValue.submit(formResource.value.doc, {
-      onSuccess: () => {
-        toast.success("Form Updated Successfully");
-      },
-      onError: (error: any) => {
-        toast.error("Failed to Update Form", {
-          description: error.message,
-        });
-      },
-    });
+    inFlightSave = persist(successMessage, silent);
+    try {
+      return await inFlightSave;
+    } finally {
+      inFlightSave = null;
+      // Saving the draft may create a gap with the published snapshot.
+      refreshPublishState();
+    }
   }
 
   function saveAndPublish() {
@@ -314,25 +418,79 @@ export const useEditForm = defineStore("editForm", () => {
     }
   }
 
-  function togglePublish() {
-    if (!formResource.value?.doc) return Promise.resolve();
-    return formResource.value.setValue.submit(
-      {
-        is_published: !formResource.value.doc.is_published,
-      },
-      {
-        onSuccess: () => {
-          if (formResource.value.doc.is_published) {
-            toast.success("Form published successfully");
-          } else {
-            toast.info("Form unpublished successfully");
-          }
-        },
-        onError: () => {
-          toast.error("Failed to publish form");
-        },
-      }
-    );
+  // Publishing state: the draft the builder edits vs the snapshot visitors get.
+  const publishState = ref<{
+    is_published: boolean;
+    active_version: string | null;
+    version_number: number | null;
+    has_unpublished_changes: boolean;
+    never_published: boolean;
+  } | null>(null);
+
+  const hasUnpublishedChanges = computed(
+    () => publishState.value?.has_unpublished_changes ?? false
+  );
+  const neverPublished = computed(
+    () => publishState.value?.never_published ?? true
+  );
+
+  async function refreshPublishState() {
+    if (!currentFormId.value) return;
+    const res = createResource({
+      url: "forms_pro.api.v1.builder.publishing.get_publish_state",
+      params: { form_id: currentFormId.value },
+    });
+    await res.fetch();
+    publishState.value = res.data ?? null;
+  }
+
+  /** Compile the draft into a new version and serve it to visitors. */
+  async function publish() {
+    if (!currentFormId.value) return;
+    // Publish what is on screen, not what was last autosaved.
+    if (isUnsaved.value) await save(undefined, true);
+
+    const res = createResource({
+      url: "forms_pro.api.v1.builder.publishing.publish_form",
+      method: "POST",
+      makeParams: () => ({ form_id: currentFormId.value }),
+    });
+    try {
+      await res.fetch();
+      publishState.value = res.data ?? null;
+      if (formResource.value?.doc) formResource.value.doc.is_published = 1;
+      toast.success(
+        res.data?.version_number > 1
+          ? `Published version ${res.data.version_number} — changes are now live`
+          : "Form published successfully"
+      );
+    } catch (error: any) {
+      toast.error("Failed to publish form", { description: error?.message });
+      throw error;
+    }
+  }
+
+  async function unpublish() {
+    if (!currentFormId.value) return;
+    const res = createResource({
+      url: "forms_pro.api.v1.builder.publishing.unpublish_form",
+      method: "POST",
+      makeParams: () => ({ form_id: currentFormId.value }),
+    });
+    try {
+      await res.fetch();
+      publishState.value = res.data ?? null;
+      if (formResource.value?.doc) formResource.value.doc.is_published = 0;
+      toast.info("Form unpublished — it is no longer accepting responses");
+    } catch (error: any) {
+      toast.error("Failed to unpublish form", { description: error?.message });
+      throw error;
+    }
+  }
+
+  async function togglePublish() {
+    if (isPublished.value) await unpublish();
+    else await publish();
   }
 
   function updateFormData(data: Partial<Form>) {
@@ -348,11 +506,14 @@ export const useEditForm = defineStore("editForm", () => {
     const newField: FormField = {
       idx: fs.length + 1,
       fieldtype,
-      label: "",
+      label: uniqueDefaultLabel(fieldtype),
       fieldname: "",
       options: "",
       default: "",
       description: "",
+      // Fields added from the palette are form-only until the user binds
+      // them to a target field; headings/page breaks never bind at all.
+      source_type: isDisplayOnly(fieldtype) ? "Presentation" : "Form Field",
       row_index: 0,
       column_index: 0,
       cell_index: 0,
@@ -366,29 +527,141 @@ export const useEditForm = defineStore("editForm", () => {
     );
   }
 
-  function addFieldFromDoctype(field: any) {
-    if (!formResource.value?.doc) return;
-    const fs: FormField[] = formResource.value.doc.fields;
+  /**
+   * Turn a DocType field (as returned by get_doctype_fields) into a form field
+   * bound to it. Does not place the field — callers decide where it lands.
+   */
+  function buildFieldFromDoctype(field: any, idx: number): FormField {
+    // The sidebar already maps fieldtype, but re-resolve here so a field added
+    // by any path inherits Email/Phone semantics from the DocType.
+    const resolved =
+      (mapDoctypeFieldForForm(field.fieldtype, field.options) as Fieldtype) ??
+      (field.fieldtype as Fieldtype);
 
-    const _newField: FormField = {
-      idx: fs.length + 1,
-      fieldtype: field.fieldtype,
+    // "Email"/"Phone" are markers, not a Select option list.
+    const isSemanticMarker =
+      resolved === Fieldtype.EMAIL || resolved === Fieldtype.PHONE;
+
+    return {
+      idx,
+      fieldtype: resolved,
       label: field.label,
       fieldname: field.fieldname,
-      options: field.options,
+      options: isSemanticMarker ? "" : field.options,
       default: field.default,
       description: field.description,
+      // A field imported from the target DocType inherits its mandatoriness.
+      reqd: !!field.reqd,
+      mapping_type: "Direct",
+      target_field: field.fieldname,
+      source_type: "Target Field",
       row_index: 0,
       column_index: 0,
       cell_index: 0,
     };
+  }
+
+  function addFieldFromDoctype(field: any) {
+    if (!formResource.value?.doc) return;
+    const fs: FormField[] = formResource.value.doc.fields;
 
     insertFieldAtStepEnd(
       fs,
-      _newField,
+      buildFieldFromDoctype(field, fs.length + 1),
       activeSectionIndex.value === 'success' ? 0 : activeSectionIndex.value as number,
       isMultiSection.value
     );
+  }
+
+  /**
+   * Drag-and-drop entry point for the Add Fields palette: creates a blank field
+   * of the given type and returns it for positioning.
+   */
+  function materializeNewField(fieldtype: Fieldtype): FormField | null {
+    if (!formResource.value?.doc) return null;
+    const fs: FormField[] = formResource.value.doc.fields;
+    const newField: FormField = {
+      idx: fs.length + 1,
+      fieldtype,
+      label: uniqueDefaultLabel(fieldtype),
+      fieldname: "",
+      options: "",
+      default: "",
+      description: "",
+      source_type: isDisplayOnly(fieldtype) ? "Presentation" : "Form Field",
+      row_index: 0,
+      column_index: 0,
+      cell_index: 0,
+    };
+    fs.push(newField);
+    return newField;
+  }
+
+  /**
+   * Drag-and-drop entry point. The sidebar hands SortableJS a *clone* of a
+   * DocType field, which is not a FormField and is not yet in doc.fields — so
+   * moveField/insertCell/insertNewRow would reject it. Push a real field in
+   * first and hand that back for positioning.
+   */
+  function materializeDoctypeField(source: any): FormField | null {
+    if (!formResource.value?.doc) return null;
+    const fs: FormField[] = formResource.value.doc.fields;
+    const newField = buildFieldFromDoctype(source, fs.length + 1);
+    fs.push(newField);
+    return newField;
+  }
+
+  function isFormField(field: any): boolean {
+    const fs: FormField[] = formResource.value?.doc?.fields ?? [];
+    return fs.includes(field);
+  }
+
+  /**
+   * Point the form at a DocType, refresh the palette, and seed its mandatory
+   * fields. Shared by the Settings tab and the builder sidebar.
+   */
+  async function setTargetDoctype(
+    doctype: string
+  ): Promise<{ changed: boolean; seeded: number; hadMappings: boolean }> {
+    const idle = { changed: false, seeded: 0, hadMappings: false };
+    if (!formResource.value?.doc || !doctype) return idle;
+    if (doctype === formResource.value.doc.target_doctype) return idle;
+
+    const hadMappings = (formResource.value.doc.fields ?? []).some(
+      (f: FormField) => f.source_type === "Target Field"
+    );
+
+    formResource.value.doc.target_doctype = doctype;
+    formResource.value.isDirty = true;
+    triggerAutosave();
+
+    await getDoctypeFields();
+
+    // Changing DocType invalidates existing mappings, so don't pile new
+    // fields on top — let the user review what's there first.
+    const seeded = hadMappings ? 0 : seedMandatoryFields();
+    return { changed: true, seeded, hadMappings };
+  }
+
+  /**
+   * Add every mandatory field of the target DocType that the form does not
+   * already map. Returns how many were added.
+   */
+  function seedMandatoryFields(): number {
+    if (!formResource.value?.doc) return 0;
+    const fs: FormField[] = formResource.value.doc.fields;
+    const alreadyMapped = new Set(
+      fs.map((f: FormField) => f.target_field).filter(Boolean)
+    );
+
+    const missing = (doctypeFields.value ?? []).filter(
+      (f: any) => f.reqd && !alreadyMapped.has(f.fieldname)
+    );
+
+    for (const field of missing) {
+      addFieldFromDoctype(field);
+    }
+    return missing.length;
   }
 
   function moveField(field: FormField, targetRow: number, targetCol: number) {
@@ -440,6 +713,16 @@ export const useEditForm = defineStore("editForm", () => {
     field.cell_index = atCell;
 
     compact(fs);
+  }
+
+  /**
+   * Put a field beside the one above it, turning that row into two columns.
+   * The click-driven counterpart to "Move to own row" — dragging onto a 12px
+   * strip is a poor way to ask for a column.
+   */
+  function moveBesideAbove(field: FormField) {
+    const fs: FormField[] = formResource.value?.doc?.fields ?? [];
+    placeBesideAbove(fs, field);
   }
 
   function insertNewRow(field: FormField, atRow: number) {
@@ -536,6 +819,11 @@ export const useEditForm = defineStore("editForm", () => {
     selectedField,
     isPublished,
     doctypeFields,
+    publishState,
+    hasUnpublishedChanges,
+    neverPublished,
+    isDraggingField,
+    setDragging,
     sections,
     isMultiSection,
     activeSectionFields,
@@ -550,6 +838,9 @@ export const useEditForm = defineStore("editForm", () => {
     save,
     saveAndPublish,
     togglePublish,
+    publish,
+    unpublish,
+    refreshPublishState,
     updateFormData,
     addField,
     addFieldFromDoctype,
@@ -563,6 +854,7 @@ export const useEditForm = defineStore("editForm", () => {
     moveField,
     insertCell,
     insertNewRow,
+    moveBesideAbove,
     undo,
     redo,
     snapshot,
@@ -570,5 +862,11 @@ export const useEditForm = defineStore("editForm", () => {
     cancelAutosave,
     enableDirtyGuard,
     disableDirtyGuard,
+    getDoctypeFields,
+    materializeDoctypeField,
+    materializeNewField,
+    isFormField,
+    seedMandatoryFields,
+    setTargetDoctype,
   };
 });

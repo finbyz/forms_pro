@@ -1,7 +1,8 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { SidebarProps } from "frappe-ui";
-import { ArrowLeft, LayoutGrid, ListChecks } from "@lucide/vue";
+import { ArrowLeft, LayoutGrid, ListChecks, UsersRound } from "@lucide/vue";
+
 
 type SidebarSectionProps = NonNullable<
   SidebarProps["sections"]
@@ -41,5 +42,17 @@ export function useManageFormSidebarItems() {
         },
       ],
     },
+    {
+      label: "",
+      items: [
+        {
+          label: "Team",
+          to: "/team",
+          icon: UsersRound,
+          isActive: route.path === "/team",
+        },
+      ],
+    },
   ]);
 }
+

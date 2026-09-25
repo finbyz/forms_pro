@@ -1,11 +1,33 @@
-import frappe
-from frappe.core.api.user_invitation import invite_by_email
-from frappe.core.doctype.docshare.docshare import DocShare
-from frappe.core.doctype.user_invitation.user_invitation import UserInvitation
-from frappe.share import get_share_name
+"""Team management.
 
-from forms_pro.forms_pro.doctype.fp_team.fp_team import FPTeam, GetTeamMembersResponse
-from forms_pro.utils.permissions import require_permission
+Two roles: Admin and Member.
+
+  * Member — can see the team and its forms.
+  * Admin  — everything a member can do, plus rename the team and manage members.
+  * Owner  — always an Admin, cannot be removed or demoted.
+
+Authorisation goes through forms_pro.utils.team_access rather than
+frappe.has_permission, because the `Forms Pro User` role grants doctype-level
+read/write on FP Team to every Forms Pro user, member or not.
+"""
+
+import frappe
+from frappe import _
+from frappe.core.api.user_invitation import invite_by_email
+from frappe.core.doctype.user_invitation.user_invitation import UserInvitation
+
+from forms_pro.forms_pro.doctype.fp_team.fp_team import (
+    ROLE_ADMIN,
+    ROLE_MEMBER,
+    FPTeam,
+    GetTeamMembersResponse,
+)
+from forms_pro.utils.team_access import (
+    assert_role_value,
+    require_admin,
+    require_member,
+    require_owner,
+)
 from forms_pro.utils.teams import (
     GetTeamFormsResponseSchema,
     set_current_team,
@@ -14,66 +36,81 @@ from forms_pro.utils.teams import (
     get_team_forms as get_team_forms_utils,
 )
 
+# ---------------------------------------------------------------- reading
+
 
 @frappe.whitelist()
-@require_permission("FP Team", "read", param="team_id")
 def get_team_for_manage(team_id: str) -> dict:
-    """Return team details for the Manage Team page.
-
-    Requires ``read`` permission on the FP Team. Returns HTTP 404/403
-    accordingly.
-    """
-    team: FPTeam = frappe.get_doc("FP Team", team_id)
+    """Team details plus the caller's own role, so the UI knows what to show."""
+    team = require_member(team_id)
+    me = frappe.session.user
     return {
         "name": team.name,
         "team_name": team.team_name,
         "logo": team.logo,
+        "owner": team.owner,
+        "my_role": team.get_role(me) or ROLE_ADMIN,
+        "is_owner": team.owner == me,
+        "member_count": len(team.users or []),
     }
 
 
 @frappe.whitelist()
-def get_team_forms(team_id: str) -> list[GetTeamFormsResponseSchema]:
-    """
-    Get the list of forms for the current team
-
-    Args:
-        team_id: ID of the team
-
-    Returns:
-        list[GetTeamFormsResponseSchema] - List of forms for the team
-    """
-    forms = get_team_forms_utils(team_id=team_id)
-    return forms
+def get_team_members(team_id: str) -> list[GetTeamMembersResponse]:
+    """The team roster. Members only."""
+    team = require_member(team_id)
+    return team.team_members
 
 
 @frappe.whitelist()
-@require_permission("FP Team", "read", param="team_id")
-def get_team_members(team_id: str) -> list[GetTeamMembersResponse]:
-    """Get the list of team members in a FP Team.
+def get_team_forms(team_id: str) -> list[GetTeamFormsResponseSchema]:
+    """Forms belonging to the team. Members only — this used to be unguarded."""
+    require_member(team_id)
+    return get_team_forms_utils(team_id=team_id)
 
-    Requires ``read`` permission on the FP Team (HTTP 403 otherwise,
-    HTTP 404 when the team does not exist).
-    """
-    # Clear cache so we read fresh DocShare data (e.g. after toggle_can_edit_team)
-    frappe.clear_document_cache("FP Team", team_id)
 
-    team: FPTeam = frappe.get_doc("FP Team", team_id)
-    members = team.team_members
+@frappe.whitelist()
+def get_users_for_team_addition(team_id: str | None = None) -> list[dict]:
+    """Active system users who are not yet members. Admins only."""
+    if not team_id:
+        from forms_pro.utils.teams import get_current_team_id
+        team_id = get_current_team_id(frappe.session.user)
+    if not team_id:
+        return []
 
-    return members
+    team = require_admin(team_id)
+
+    existing_members = {member.user for member in (team.users or [])}
+    existing_members.add("Guest")
+
+    users = frappe.get_all(
+        "User",
+        filters={"enabled": 1, "name": ["!=", "Guest"]},
+        fields=["name", "full_name", "user_image"],
+        order_by="full_name asc",
+    )
+
+    return [
+        {
+            "label": u.full_name or u.name,
+            "value": u.name,
+            "email": u.name,
+            "user_image": u.user_image,
+        }
+        for u in users
+        if u.name not in existing_members
+    ]
+
+
+# ---------------------------------------------------------------- lifecycle
 
 
 @frappe.whitelist(methods=["POST"])
 def create_team(team_name: str, logo_url: str | None = None) -> FPTeam:
-    """
-    Create a new team
-
-    Args:
-        team_name: Name of the team
-
-    Returns:
-        FPTeam - The created team
-    """
+    """Create a team. The creator becomes its owner and first admin."""
+    team_name = (team_name or "").strip()
+    if not team_name:
+        frappe.throw(_("Please enter a team name."), frappe.ValidationError)
 
     team: FPTeam = frappe.new_doc("FP Team")
     team.team_name = team_name
@@ -84,130 +121,198 @@ def create_team(team_name: str, logo_url: str | None = None) -> FPTeam:
 
 
 @frappe.whitelist(methods=["POST"])
-def switch_team(team_id: str) -> None:
-    """
-    Switch to a new team
-    """
+def save(team_id: str, fields: dict) -> None:
+    """Update team details. Admins only."""
+    ALLOWED_SAVE_FIELDS = ("team_name", "logo")
 
-    if not frappe.has_permission(
-        doctype="FP Team",
-        ptype="read",
-        doc=team_id,
-        user=frappe.session.user,
-    ):
-        raise frappe.PermissionError("You do not have permission to switch to this team")
+    team = require_admin(team_id)
 
-    set_current_team(team_id, frappe.session.user)
+    for key, value in (fields or {}).items():
+        if key not in ALLOWED_SAVE_FIELDS:
+            frappe.throw(_("Field '{0}' is not allowed").format(key), frappe.ValidationError)
+        if key == "team_name" and not (value or "").strip():
+            frappe.throw(_("Team name cannot be empty."), frappe.ValidationError)
+        setattr(team, key, value)
+
+    team.save(ignore_permissions=True)
 
 
 @frappe.whitelist(methods=["POST"])
-@require_permission("FP Team", "write", param="team_id")
-def invite_team_members(team_id: str, emails: list[str]) -> None:
-    """Invite team members to a team.
-
-    Requires ``write`` permission on the FP Team (HTTP 403 otherwise,
-    HTTP 404 when the team does not exist).
+def delete_team(team_id: str) -> dict:
     """
-    emails_str = ", ".join(emails)
+    Delete a team. Owner only.
+
+    Refuses while forms still belong to it — deleting would orphan them and
+    their submissions.
+    """
+    team = require_owner(team_id)
+
+    form_count = frappe.db.count("Form", {"linked_team_id": team_id})
+    if form_count:
+        frappe.throw(
+            _("This team still has {0} form(s). Move or delete them first.").format(form_count),
+            frappe.ValidationError,
+        )
+
+    members = [m.user for m in team.users or []]
+    frappe.delete_doc("FP Team", team_id, ignore_permissions=True)
+
+    # Anyone whose current team was this one gets re-pointed on next read.
+    for user in members:
+        if frappe.defaults.get_user_default("current_team", user) == team_id:
+            frappe.defaults.clear_user_default("current_team", user)
+
+    return {"deleted": team_id}
+
+
+@frappe.whitelist(methods=["POST"])
+def leave_team(team_id: str) -> dict:
+    """Leave a team. The owner must transfer ownership or delete it instead."""
+    team = require_member(team_id)
+    me = frappe.session.user
+
+    if team.owner == me:
+        frappe.throw(
+            _("You own this team. Delete it instead, or transfer it first."),
+            frappe.ValidationError,
+        )
+
+    team.remove_from_team(me)
+    if frappe.defaults.get_user_default("current_team", me) == team_id:
+        frappe.defaults.clear_user_default("current_team", me)
+
+    return {"left": team_id}
+
+
+@frappe.whitelist(methods=["POST"])
+def switch_team(team_id: str) -> None:
+    """Make a team the caller's current team. Members only."""
+    require_member(team_id)
+    set_current_team(team_id, frappe.session.user)
+
+
+# ---------------------------------------------------------------- membership
+
+
+@frappe.whitelist(methods=["POST"])
+def add_team_member(team_id: str | None = None, user_email: str | None = None, role: str = ROLE_MEMBER) -> None:
+    """Add an existing Frappe user to the team. Admins only."""
+    if not team_id:
+        from forms_pro.utils.teams import get_current_team_id
+        team_id = get_current_team_id(frappe.session.user)
+    if not team_id:
+        frappe.throw(_("Team ID is required"), frappe.ValidationError)
+
+    team = require_admin(team_id)
+    assert_role_value(role)
+
+    if not user_email:
+        frappe.throw(_("User email is required"), frappe.ValidationError)
+
+    if not frappe.db.exists("User", user_email):
+        frappe.throw(_("User {0} does not exist").format(user_email), frappe.DoesNotExistError)
+
+    if team.is_team_member(user_email):
+        frappe.throw(_("User is already a member of the team"), frappe.DuplicateEntryError)
+
+    team.add_to_team(user_email, role=role)
+    team.save(ignore_permissions=True)
+
+    if not frappe.defaults.get_user_default("current_team", user_email):
+        set_current_team(team_id, user_email)
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_member_from_team(team_id: str, member_email: str) -> None:
+    """Remove a member. Admins only. The owner cannot be removed."""
+    team = require_admin(team_id)
+    team.remove_from_team(member_email)
+
+    if frappe.defaults.get_user_default("current_team", member_email) == team_id:
+        frappe.defaults.clear_user_default("current_team", member_email)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_member_role(team_id: str, member_email: str, role: str) -> None:
+    """Promote or demote a member. Admins only."""
+    team = require_admin(team_id)
+    assert_role_value(role)
+    team.set_member_role(member_email, role)
+
+
+@frappe.whitelist(methods=["POST"])
+def toggle_can_edit_team(team_id: str, member_email: str) -> None:
+    """
+    Flip a member between Admin and Member.
+
+    Kept for the existing UI; set_member_role is the explicit version and is
+    preferable because a toggle depends on state the caller cannot see.
+    """
+    team = require_admin(team_id)
+    current = team.get_role(member_email)
+    if current is None:
+        frappe.throw(_("User is not a member of this team"), frappe.DoesNotExistError)
+
+    team.set_member_role(
+        member_email, ROLE_MEMBER if current == ROLE_ADMIN else ROLE_ADMIN
+    )
+
+
+# ---------------------------------------------------------------- invitations
+
+
+@frappe.whitelist(methods=["POST"])
+def invite_team_members(team_id: str, emails: list[str]) -> None:
+    """Invite people by email. Admins only."""
+    require_admin(team_id)
+
+    if not emails:
+        frappe.throw(_("Please provide at least one email address."), frappe.ValidationError)
 
     invite_by_email(
-        emails=emails_str,
+        emails=", ".join(emails),
         roles=["Forms Pro User"],
-        redirect_to_path=f"/api/v2/method/forms_pro.api.team.add_member_to_team_via_invitation?team_id={team_id}",
+        redirect_to_path=(
+            "/api/v2/method/forms_pro.api.team.add_member_to_team_via_invitation"
+            f"?team_id={team_id}"
+        ),
         app_name="forms_pro",
     )
 
 
-@frappe.whitelist(methods=["POST"])
+@frappe.whitelist()
 def add_member_to_team_via_invitation(team_id: str, invite_id: str | None = None) -> None:
     """
-    Add a member to a team when an invitation is accepted.
-    Accepts invite_id from query param (URL may send it as 'id').
+    Land here when an invitation is accepted.
+
+    Reached by redirect (a GET), so this must not be POST-only. Authorisation
+    comes from the invitation itself, not the caller's session.
     """
     invite_id = invite_id or frappe.form_dict.get("id")
     if not invite_id:
-        raise frappe.PermissionError("Invitation id is required")
+        frappe.throw(_("Invitation id is required"), frappe.PermissionError)
 
     invite: UserInvitation = frappe.get_doc("User Invitation", invite_id)
 
     if invite.status != "Accepted":
-        raise frappe.PermissionError("Invitation not accepted")
-
-    if not frappe.has_permission(
-        doctype="FP Team",
-        ptype="read",
-        doc=team_id,
-        user=invite.invited_by,
-    ):
-        raise frappe.PermissionError("You do not have permission to add a member to this team")
-
-    if not frappe.db.exists("User", invite.email):
-        raise frappe.PermissionError("User not found")
+        frappe.throw(_("Invitation not accepted"), frappe.PermissionError)
 
     team: FPTeam = frappe.get_doc("FP Team", team_id)
 
-    if team.is_team_member(invite.email):
-        raise frappe.DuplicateEntryError("User is already a member of the team")
+    # The person who sent the invite must still be entitled to add members.
+    if not team.is_admin(invite.invited_by):
+        frappe.throw(
+            _("Whoever sent this invitation can no longer add members to the team."),
+            frappe.PermissionError,
+        )
 
-    team.add_to_team(invite.email)
-    team.save(ignore_permissions=True)
-    set_current_team(team_id, invite.email)
+    if not frappe.db.exists("User", invite.email):
+        frappe.throw(_("User not found"), frappe.DoesNotExistError)
+
+    if not team.is_team_member(invite.email):
+        team.add_to_team(invite.email, role=ROLE_MEMBER)
+        team.save(ignore_permissions=True)
+        set_current_team(team_id, invite.email)
 
     frappe.local.response["type"] = "redirect"
     frappe.local.response["location"] = "/forms"
-
-
-@frappe.whitelist(methods=["POST"])
-@require_permission("FP Team", "write", param="team_id")
-def toggle_can_edit_team(team_id: str, member_email: str) -> None:
-    """Toggle the can_edit_team permission for a team member.
-
-    Requires ``write`` permission on the FP Team (HTTP 403 otherwise,
-    HTTP 404 when the team does not exist).
-    """
-    team: FPTeam = frappe.get_doc("FP Team", team_id)
-    if team.owner == member_email:
-        raise frappe.PermissionError(
-            "The team owner always retains full permissions and cannot have edit access toggled"
-        )
-
-    share_name = get_share_name(doctype="FP Team", name=team_id, user=member_email, everyone=0)
-    if not share_name:
-        raise frappe.PermissionError(
-            "You do not have permission to toggle the can_edit_team permission for this team member"
-        )
-
-    share: DocShare = frappe.get_doc("DocShare", share_name)
-    share.write = not share.write
-    share.share = not share.share
-    share.save(ignore_permissions=True)
-
-
-@frappe.whitelist(methods=["POST"])
-@require_permission("FP Team", "write", param="team_id")
-def save(team_id: str, fields: dict) -> None:
-    """Update team fields. Only fields present in the dict are updated.
-
-    Requires ``write`` permission on the FP Team (HTTP 403 otherwise,
-    HTTP 404 when the team does not exist).
-    """
-    ALLOWED_SAVE_FIELDS = ["team_name", "logo"]
-
-    team: FPTeam = frappe.get_doc("FP Team", team_id)
-    for key, value in fields.items():
-        if key not in ALLOWED_SAVE_FIELDS:
-            frappe.throw(f"Field '{key}' is not allowed")
-        setattr(team, key, value)
-    team.save()
-
-
-@frappe.whitelist(methods=["POST"])
-@require_permission("FP Team", "write", param="team_id")
-def remove_member_from_team(team_id: str, member_email: str) -> None:
-    """Remove a member from a team.
-
-    Requires ``write`` permission on the FP Team (HTTP 403 otherwise,
-    HTTP 404 when the team does not exist).
-    """
-    team: FPTeam = frappe.get_doc("FP Team", team_id)
-    team.remove_from_team(member_email)

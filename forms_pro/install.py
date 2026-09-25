@@ -36,6 +36,18 @@ def _ensure_admin_has_default_team():
 
 
 def give_admin_forms_pro_role():
+    """
+    Make sure Administrator can use Forms Pro.
+
+    Saving the Administrator User destroys that user's active sessions, so
+    anyone logged into the desk is kicked out. This runs from `before_tests()`,
+    i.e. on every `bench run-tests`, and used to append the role and save
+    unconditionally -- so each test run logged the developer out of their own
+    site. Only touch the document when the role is genuinely missing.
+    """
+    if frappe.db.exists("Has Role", {"parent": "Administrator", "role": FORMS_PRO_ROLE}):
+        return
+
     admin = frappe.get_doc("User", "Administrator")
     admin.append("roles", {"role": FORMS_PRO_ROLE})
     admin.save()

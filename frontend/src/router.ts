@@ -58,7 +58,9 @@ const routes: RouteRecordRaw[] = [
     path: "/manage/:id",
     name: "Manage Form",
     component: () => import("@/pages/manage/ManageForm.vue"),
-    redirect: { name: "Manage Form Overview" },
+    // A named redirect does not carry params, so `/manage/:id` resolved to the
+    // Overview route with no id and the navigation fell back to the dashboard.
+    redirect: (to) => ({ name: "Manage Form Overview", params: to.params }),
     meta: {
       fetch: (route) => formForViewResource(route.params.id as string),
     },

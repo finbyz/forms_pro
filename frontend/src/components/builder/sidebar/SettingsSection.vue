@@ -11,20 +11,21 @@ const routeExists = ref(false);
 
 const validateRoute = async () => {
     routeExists.value = await validateFormRoute(
-        editFormStore.formData.name,
-        editFormStore.formData.route
+        editFormStore.formData?.name,
+        editFormStore.formData?.route
     );
     showValidateMsg.value = true;
 };
 
 watch(
-    () => editFormStore.formData.allow_incomplete,
+    () => editFormStore.formData?.allow_incomplete,
     (newVal) => {
+        if (!editFormStore.formData) return;
         if (newVal) {
             editFormStore.formData.login_required = true;
-        }
-        if (!newVal) {
-            editFormStore.formData.login_required = editFormStore.originalFormData.login_required;
+        } else {
+            editFormStore.formData.login_required =
+                editFormStore.originalFormData?.login_required ?? false;
         }
     }
 );
@@ -32,21 +33,21 @@ watch(
 const inExpandedDescription = ref(false);
 </script>
 <template>
-    <div class="space-y-4">
+    <div v-if="editFormStore.formData" class="space-y-4">
         <h3 class="text-lg font-medium">Settings</h3>
         <div class="flex flex-col gap-3">
             <FormControl
                 label="Linked DocType"
                 variant="outline"
                 type="text"
-                v-model="editFormStore.formData.linked_doctype"
+                v-model="editFormStore.formData!.target_doctype"
                 disabled
             />
             <FormControl
                 label="Form ID"
                 variant="outline"
                 type="text"
-                v-model="editFormStore.formData.name"
+                v-model="editFormStore.formData!.name"
                 disabled
             />
 
@@ -57,7 +58,7 @@ const inExpandedDescription = ref(false);
                     label="Route"
                     variant="outline"
                     type="text"
-                    v-model="editFormStore.formData.route"
+                    v-model="editFormStore.formData!.route"
                     description="Set a unique route for the form."
                     @change="validateRoute()"
                 />
@@ -66,17 +67,17 @@ const inExpandedDescription = ref(false);
                         Route already exists
                     </span>
                     <span v-else class="text-green-500 flex items-center gap-1">
-                        <span class="lucide-circle-check w-4 h-4" aria-hidden="true" /> Route is available</span
+                        <lucide-circle-check class="w-4 h-4" aria-hidden="true" /> Route is available</span
                     >
                 </div>
                 <Tooltip
                     text="Login is required when allow incomplete forms is enabled"
-                    :disabled="!editFormStore.formData.allow_incomplete"
+                    :disabled="!editFormStore.formData?.allow_incomplete"
                 >
                     <div class="flex flex-col gap-2">
                         <Checkbox
-                            v-model="editFormStore.formData.login_required"
-                            :disabled="editFormStore.formData.allow_incomplete"
+                            v-model="editFormStore.formData!.login_required"
+                            :disabled="editFormStore.formData?.allow_incomplete"
                             label="Login Required"
                             variant="outline"
                             size="sm"
@@ -88,7 +89,7 @@ const inExpandedDescription = ref(false);
                 </Tooltip>
                 <div class="flex flex-col gap-2">
                     <Checkbox
-                        v-model="editFormStore.formData.allow_incomplete"
+                        v-model="editFormStore.formData!.allow_incomplete"
                         size="sm"
                         label="Allow Incomplete Forms"
                         variant="outline"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useCall, Button } from "frappe-ui";
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import FieldRenderer from "../builder/FieldRenderer.vue";
 import { mapDoctypeFieldForForm } from "@/utils/form_fields";
 
@@ -40,11 +40,13 @@ const columns = computed(() => {
     }));
 });
 
-watch(() => props.doctype, (newDoctype) => {
-    if (newDoctype) {
-        columnResource.fetch();
-    }
-}, { immediate: false });
+watch(
+    () => props.doctype,
+    (newDoctype) => {
+        if (newDoctype) columnResource.fetch();
+    },
+    { immediate: true }
+);
 
 function addRow() {
     const newRow = columns.value.reduce((acc, column) => {
@@ -66,7 +68,23 @@ function updateCell(rowIndex: number, key: string, value: unknown) {
 </script>
 <template>
     <div class="flex flex-col gap-5 p-4 bg-surface-gray-1 border rounded">
-        <div v-if="!rows.length" class="flex flex-col gap-2 items-center justify-center">
+        <div v-if="!doctype" class="flex flex-col gap-2 items-center justify-center">
+            <h5 class="text-base font-medium text-ink-gray-6">No child DocType set</h5>
+            <p class="text-sm text-ink-gray-5">
+                Set this field's <span class="font-medium">Options</span> to a child DocType
+                (one with "Is Child Table" enabled) to choose its columns.
+            </p>
+        </div>
+        <div
+            v-else-if="!columns.length"
+            class="flex flex-col gap-2 items-center justify-center"
+        >
+            <h5 class="text-base font-medium text-ink-gray-6">No columns</h5>
+            <p class="text-sm text-ink-gray-5">
+                {{ doctype }} has no usable fields.
+            </p>
+        </div>
+        <div v-else-if="!rows.length" class="flex flex-col gap-2 items-center justify-center">
             <h5 class="text-base font-medium text-ink-gray-6">No rows added</h5>
             <p class="text-sm text-ink-gray-5">Add an item to get started</p>
         </div>
@@ -91,5 +109,5 @@ function updateCell(rowIndex: number, key: string, value: unknown) {
             />
         </div>
     </div>
-    <Button v-if="!inEditMode" @click="addRow">Add Row</Button>
+    <Button v-if="!inEditMode && columns.length" @click="addRow">Add Row</Button>
 </template>

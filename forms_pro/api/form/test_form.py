@@ -9,6 +9,7 @@ from forms_pro.api.form import (
     get_form_shared_with,
     remove_form_access,
     set_form_permission,
+    toggle_form_published,
 )
 from forms_pro.tests import FORMS_PRO_TEST_USER
 from forms_pro.tests.factories.form_factory import FormFactory
@@ -21,6 +22,12 @@ class TestGetFormForView(IntegrationTestCase):
     def test_returns_form_when_user_has_read(self) -> None:
         result = get_form_for_view(form_id=self.form.name)
         self.assertEqual(result["name"], self.form.name)
+        self.assertIn("creation", result)
+        self.assertIn("modified", result)
+        self.assertIn("owner", result)
+        self.assertIn("overview_stats", result)
+        self.assertIn("total_submissions", result["overview_stats"])
+        self.assertIn("total_fields", result["overview_stats"])
 
     def test_raises_403_when_user_lacks_read(self) -> None:
         with self.set_user(FORMS_PRO_TEST_USER):
@@ -32,6 +39,20 @@ class TestGetFormForView(IntegrationTestCase):
         with self.assertRaises(frappe.DoesNotExistError) as ctx:
             get_form_for_view(form_id="MISSING_FORM_XYZ")
         self.assertEqual(ctx.exception.http_status_code, 404)
+
+
+class TestToggleFormPublished(IntegrationTestCase):
+    def setUp(self) -> None:
+        self.form = FormFactory.create()
+
+    def test_admin_can_toggle_published(self) -> None:
+        res1 = toggle_form_published(form_id=self.form.name)
+        self.assertEqual(res1["is_published"], 1)
+        self.assertEqual(res1["status"], "Published")
+
+        res2 = toggle_form_published(form_id=self.form.name)
+        self.assertEqual(res2["is_published"], 0)
+        self.assertEqual(res2["status"], "Draft")
 
 
 class TestGetFormForEdit(IntegrationTestCase):

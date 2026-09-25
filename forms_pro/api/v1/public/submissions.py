@@ -10,8 +10,9 @@ from forms_pro.forms_pro.doctype.form.form import Form
 from forms_pro.forms_pro.doctype.form_field.form_field import _DISPLAY_ONLY_FIELDTYPES
 from forms_pro.utils.form_generator import SubmissionStatus
 from forms_pro.utils.permissions import require_permission
+from forms_pro.api.v1.public.security import check_rate_limit, verify_captcha
 
-from .schema import UserSubmissionResponse
+from forms_pro.api.submission.schema import UserSubmissionResponse
 
 
 def _coerce_field_value(value: Any, fieldtype: str) -> Any:
@@ -109,6 +110,7 @@ def submit_form_response(
     form_id: str,
     form_data: list[dict],
     submission_status: str = SubmissionStatus.SUBMITTED.value,
+    captcha_token: str | None = None,
 ) -> str:
     """
     Submit a form response
@@ -137,6 +139,11 @@ def submit_form_response(
                 _("This form is un-published, so responses are no longer being collected."),
                 frappe.PermissionError,
             )
+
+        # Guard before any work is done, so a rejected request never creates a
+        # submission row or touches the target DocType.
+        check_rate_limit(form.route or form_id)
+        verify_captcha(captcha_token, action="submit")
 
         form_data_dict = {item["fieldname"]: item["value"] for item in form_data}
 

@@ -36,36 +36,42 @@ const activePanelId = computed(() => panelId(activeSection.value.id));
         class="h-full w-[300px] border-r border-outline-gray-1 flex flex-col bg-surface-base shrink-0"
         data-form-builder-component="form-builder-sidebar"
     >
-        <!-- Tab Navigation (Horizontal) -->
-        <div
-            role="tablist"
-            aria-label="Form builder sections"
-            class="flex items-center w-full px-4 pt-4 border-b border-outline-gray-1 bg-surface-base gap-4"
-        >
-            <button
-                v-for="section in sidebarSections"
-                :key="section.id"
-                role="tab"
-                :id="tabId(section.id)"
-                :aria-selected="activeSection.id === section.id"
-                :aria-controls="panelId(section.id)"
-                class="pb-2 text-sm font-medium transition-colors border-b-2 relative -mb-[1px]"
-                :class="activeSection.id === section.id ? 'border-ink-gray-9 text-ink-gray-9' : 'border-transparent text-ink-gray-5 hover:text-ink-gray-7'"
-                @click="activeSection = section"
+        <!-- Tab Navigation (Segmented pill control with clean Frappe friendly curves) -->
+        <div class="px-3 pt-3 pb-2 border-b border-outline-gray-1 bg-surface-base">
+            <div
+                role="tablist"
+                aria-label="Form builder sections"
+                class="flex items-center p-1 bg-surface-gray-2 rounded-xl border border-outline-gray-1/80 shadow-2xs"
             >
-                {{ section.label }}
-            </button>
+                <button
+                    v-for="section in sidebarSections"
+                    :key="section.id"
+                    role="tab"
+                    :id="tabId(section.id)"
+                    :aria-selected="activeSection.id === section.id"
+                    :aria-controls="panelId(section.id)"
+                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 text-center"
+                    :class="
+                        activeSection.id === section.id
+                            ? 'bg-surface-white text-ink-gray-9 shadow-xs font-semibold border border-outline-gray-2/40'
+                            : 'text-ink-gray-6 hover:text-ink-gray-9 hover:bg-surface-white/60'
+                    "
+                    @click="activeSection = section"
+                >
+                    {{ section.label }}
+                </button>
+            </div>
         </div>
 
         <!-- Tab Content Panels -->
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 min-h-0 overflow-y-auto">
             <template v-for="section in sidebarSections" :key="section.id">
                 <div
                     v-show="activeSection.id === section.id"
                     role="tabpanel"
                     :id="panelId(section.id)"
                     :aria-labelledby="tabId(section.id)"
-                    class="h-full p-4"
+                    class="p-4"
                 >
                     <component :is="section.section" />
                 </div>

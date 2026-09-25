@@ -10,3 +10,5 @@ forms_pro.patches.v16_migration.migrate_forms_to_v16
 forms_pro.patches.v16_0.add_field_keys
 forms_pro.patches.v16_0.migrate_existing_mappings
 forms_pro.patches.v16_0.migrate_form_status
+forms_pro.patches.v16_0.normalize_source_type
+forms_pro.patches.v16_0.backfill_team_roles

@@ -43,9 +43,18 @@ export const useUser = defineStore("user", () => {
   let initPromise: Promise<void> | null = null;
   async function initialize(): Promise<void> {
     if (initPromise) return initPromise;
+    const sessionUser = (window as any).frappe?.session?.user || (window as any).frappe?.boot?.user?.name;
+    if (sessionUser === "Guest") return;
+
     initPromise = (async () => {
-      await userResource.fetch();
-      await userTeamsResource.fetch();
+      try {
+        await userResource.fetch();
+        if (userResource.data) {
+          await userTeamsResource.fetch();
+        }
+      } catch {
+        // Guest or unauthenticated session — silent fallback
+      }
     })();
     return initPromise;
   }

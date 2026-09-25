@@ -2,15 +2,6 @@
 @import "frappe-ui/style.css";
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap");
 
-@font-face {
-    font-family: "Instrument Serif";
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src:
-        url("./assets/Instrument_Serif/InstrumentSerif-Regular.woff2") format("woff2"),
-        url("./assets/Instrument_Serif/InstrumentSerif-Regular.woff") format("woff");
-}
 
 /* Animation utilities following frappe-ui and UI/UX best practices */
 @layer utilities {
@@ -132,4 +123,111 @@
 .focus-visible\:focus-ring:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
+}
+
+/* Modal dialog and dropdown z-index layering */
+.dialog-overlay,
+[data-dialog],
+[data-reka-dialog-overlay] {
+    z-index: 100 !important;
+}
+
+.dialog-content,
+[data-reka-dialog-content] {
+    z-index: 101 !important;
+}
+
+/* Floating content (dropdowns, popovers, comboboxes, menus, tooltips) must appear above dialogs */
+.dropdown-content,
+.PopoverContent,
+[data-reka-popover-content],
+[data-radix-popover-content],
+[data-reka-popper-content-wrapper],
+[data-radix-popper-content-wrapper],
+[data-reka-combobox-content],
+[data-radix-combobox-content],
+[data-reka-menu-content],
+[data-radix-menu-content],
+[data-reka-dropdown-menu-content],
+[data-radix-dropdown-menu-content],
+[data-reka-select-content],
+[data-radix-select-content],
+[data-reka-tooltip-content],
+[data-radix-tooltip-content] {
+    z-index: 200 !important;
+}
+
+
+/*
+ * Form theming (Design tab).
+ *
+ * Scoped to `.fp-themed`, which formTheme.ts only adds when the form carries a
+ * complete token set — so every var() below always resolves. An unthemed form
+ * never matches these rules and keeps frappe-ui's own styling untouched.
+ *
+ * Do not add `inherit` fallbacks here: on an unset token that resolves to the
+ * parent's value (radius 0, border black) and wrecks the framework defaults.
+ */
+.fp-themed {
+  background-color: var(--fp-background-color);
+  font-family: var(--fp-font-family), ui-sans-serif, system-ui, sans-serif;
+  color: var(--fp-text-color);
+}
+
+.fp-themed .form-container-simple {
+  max-width: var(--fp-form-max-width);
+  border-radius: var(--fp-card-radius);
+}
+
+.fp-themed :where(input, select, textarea) {
+  font-family: var(--fp-font-family), ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--fp-font-size);
+  border-radius: var(--fp-input-radius);
+  border-color: var(--fp-input-border-color);
+  color: var(--fp-text-color);
+}
+
+.fp-themed :where(input, select, textarea):focus {
+  border-color: var(--fp-input-focus-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fp-input-focus-color) 25%, transparent);
+}
+
+/*
+ * The tokens above only reached the page background and the inputs, so
+ * changing "Primary" or "Font Size" in the Design tab appeared to do nothing
+ * to the buttons and labels -- the two things people change first.
+ */
+.fp-themed label,
+.fp-themed legend {
+  font-family: var(--fp-font-family), ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--fp-font-size);
+  color: var(--fp-text-color);
+}
+
+/* Help text under a field. */
+.fp-themed small {
+  color: var(--fp-muted-text-color);
+  font-family: var(--fp-font-family), ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Next / Submit. Tagged with a class of our own rather than matching
+ * frappe-ui's utility classes, which are an implementation detail and change
+ * between releases.
+ */
+.fp-themed .fp-primary-action {
+  background-color: var(--fp-primary-color);
+  border-color: var(--fp-primary-color);
+  border-radius: var(--fp-button-radius);
+  color: #fff;
+}
+
+.fp-themed .fp-primary-action:hover {
+  background-color: var(--fp-primary-hover-color);
+  border-color: var(--fp-primary-hover-color);
+}
+
+.fp-themed .fp-primary-action:focus-visible {
+  outline: 2px solid var(--fp-primary-hover-color);
+  outline-offset: 2px;
 }

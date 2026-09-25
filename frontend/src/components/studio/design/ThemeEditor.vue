@@ -2,11 +2,37 @@
 import { ref, watch, computed } from "vue";
 import { Button, FormControl, Tooltip, Badge } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
+import { ensureFontLoaded, applyTheme } from "@/utils/formTheme";
+import FieldRenderer from "@/components/builder/FieldRenderer.vue";
+import { useGroupedRows } from "@/composables/useGroupedRows";
+import type { FormField } from "@/types/formfield";
 import { toast } from "vue-sonner";
-import { Monitor, Tablet, Smartphone } from "@lucide/vue";
+import { PaintBucket, Ruler, Type } from "@lucide/vue";
+
 
 const editFormStore = useEditForm();
 const previewDevice = ref<"desktop" | "tablet" | "mobile">("desktop");
+
+/**
+ * Preview shows the first step only, the same slice a visitor lands on.
+ * Page Breaks are step boundaries, not fields, so they are never rendered.
+ */
+const previewFields = computed<FormField[]>(() => {
+  const all = (editFormStore.fields ?? []) as FormField[];
+  const firstBreak = all.findIndex((f) => f.fieldtype === "Page Break");
+  return (firstBreak === -1 ? all : all.slice(0, firstBreak)).filter(
+    (f) => f.fieldtype !== "Page Break"
+  );
+});
+
+const previewRows = useGroupedRows(previewFields);
+
+const previewRef = ref<HTMLElement | null>(null);
+
+/** Fields are read-only here, but the renderer still expects a model value. */
+const previewValues = computed<Record<string, unknown>>(() =>
+  Object.fromEntries(previewFields.value.map((f) => [f.fieldname, undefined]))
+);
 
 interface ThemeTokens {
   font_family: string;
@@ -44,6 +70,17 @@ const defaults: ThemeTokens = {
 
 const tokens = ref<ThemeTokens>({ ...defaults });
 
+/**
+ * Apply the tokens to the preview exactly the way the live form applies them,
+ * so what you see here is what visitors get. Hand-styling the preview is how
+ * it drifted out of step with the published form in the first place.
+ */
+watch(
+  [previewRef, tokens],
+  () => applyTheme(previewRef.value, { ...tokens.value }),
+  { deep: true, immediate: true }
+);
+
 watch(() => editFormStore.formData, (data) => {
   if (data?.theme_overrides_json) {
     try {
@@ -55,6 +92,10 @@ watch(() => editFormStore.formData, (data) => {
 }, { immediate: true });
 
 watch(tokens, () => {
+  // A font only changes the preview once its stylesheet is fetched; without
+  // this the browser silently falls back and nothing looks different.
+  ensureFontLoaded(tokens.value.font_family);
+
   if (editFormStore.formResource?.doc) {
     editFormStore.formResource.doc.theme_overrides_json = JSON.stringify(tokens.value);
     editFormStore.triggerAutosave();
@@ -64,7 +105,7 @@ watch(tokens, () => {
 const sections = [
   {
     label: "Typography",
-    icon: "lucide-type",
+    icon: Type,
     fields: [
       { key: "font_family" as const, label: "Font Family", type: "select", options: ["Inter", "Roboto", "Open Sans", "Poppins", "Montserrat", "Nunito", "Source Sans Pro"] },
       { key: "font_size" as const, label: "Font Size", type: "select", options: ["14px", "15px", "16px", "17px", "18px", "20px"] },
@@ -72,7 +113,7 @@ const sections = [
   },
   {
     label: "Colors",
-    icon: "lucide-paint-bucket",
+    icon: PaintBucket,
     fields: [
       { key: "text_color" as const, label: "Text", type: "color" },
       { key: "muted_text_color" as const, label: "Muted Text", type: "color" },
@@ -85,7 +126,7 @@ const sections = [
   },
   {
     label: "Shape & Spacing",
-    icon: "lucide-ruler",
+    icon: Ruler,
     fields: [
       { key: "input_radius" as const, label: "Input Radius", type: "select", options: ["4px", "6px", "8px", "10px", "12px", "16px", "24px", "9999px"] },
       { key: "button_radius" as const, label: "Button Radius", type: "select", options: ["4px", "6px", "8px", "10px", "12px", "16px", "24px", "9999px"] },
@@ -227,13 +268,13 @@ function importTheme(file: File) {
         </div>
         <div class="flex gap-1">
           <Tooltip text="Save Theme" placement="bottom">
-            <Button variant="ghost" size="sm" @click="saveTheme"><span class="lucide-save w-3 h-3" aria-hidden="true" /></Button>
+            <Button variant="ghost" size="sm" @click="saveTheme"><lucide-save class="w-3 h-3" aria-hidden="true" /></Button>
           </Tooltip>
           <Tooltip text="Export Theme" placement="bottom">
-            <Button variant="ghost" size="sm" @click="exportTheme"><span class="lucide-folder-open w-3 h-3" aria-hidden="true" /></Button>
+            <Button variant="ghost" size="sm" @click="exportTheme"><lucide-folder-open class="w-3 h-3" aria-hidden="true" /></Button>
           </Tooltip>
           <Tooltip text="Reset to Defaults" placement="bottom">
-            <Button variant="ghost" size="sm" @click="resetTheme"><span class="lucide-eye w-3 h-3" aria-hidden="true" /></Button>
+            <Button variant="ghost" size="sm" @click="resetTheme"><lucide-eye class="w-3 h-3" aria-hidden="true" /></Button>
           </Tooltip>
         </div>
       </div>
@@ -243,7 +284,7 @@ function importTheme(file: File) {
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-gray-500 uppercase">Saved Themes</span>
           <input type="file" accept=".json" @change="importTheme($event.target.files[0])" class="hidden" ref="fileInput" />
-          <Button variant="ghost" size="sm" @click="$refs.fileInput?.click()"><span class="lucide-contrast w-3 h-3" aria-hidden="true" /></Button>
+          <Button variant="ghost" size="sm" @click="$refs.fileInput?.click()"><lucide-contrast class="w-3 h-3" aria-hidden="true" /></Button>
         </div>
         <div class="flex flex-wrap gap-1">
           <button
@@ -261,7 +302,7 @@ function importTheme(file: File) {
       <!-- Contrast Warnings -->
       <div v-if="contrastWarnings.some(w => w.level === 'fail')" class="p-3 bg-red-50 border border-red-200 rounded-lg">
         <div class="flex items-center gap-2 text-xs text-red-700 mb-2">
-          <span class="lucide-alert-triangle w-4 h-4" aria-hidden="true" />
+          <lucide-alert-triangle class="w-4 h-4" aria-hidden="true" />
           <span class="font-medium">Contrast Issues</span>
         </div>
         <div class="flex flex-col gap-1 text-xs">
@@ -276,7 +317,7 @@ function importTheme(file: File) {
       <!-- Theme Settings -->
       <div v-for="section in sections" :key="section.label" class="flex flex-col gap-3">
         <div class="flex items-center gap-2 pt-2 border-t">
-          <span :class="[section.icon, 'w-4 h-4 text-gray-400']" aria-hidden="true" />
+          <component :is="section.icon" class="w-4 h-4 text-gray-400" aria-hidden="true" />
           <span class="text-xs font-semibold text-gray-500 uppercase">{{ section.label }}</span>
         </div>
         <div v-for="field in section.fields" :key="field.key" class="flex items-center gap-2">
@@ -306,19 +347,19 @@ function importTheme(file: File) {
       <!-- Top header for live preview -->
       <div class="h-14 border-b bg-white flex items-center justify-between px-6 shrink-0">
         <div class="flex items-center gap-2 text-sm text-gray-500 font-medium">
-          <span class="lucide-eye w-4 h-4" aria-hidden="true" />
+          <lucide-eye class="w-4 h-4" aria-hidden="true" />
           Live Preview
         </div>
         <div class="flex items-center gap-1">
-          <!-- Device Toggles -->
-          <Button :variant="previewDevice === 'desktop' ? 'solid' : 'ghost'" :theme="previewDevice === 'desktop' ? 'gray' : ''" size="sm" :icon="Monitor" @click="previewDevice = 'desktop'" />
-          <Button :variant="previewDevice === 'tablet' ? 'solid' : 'ghost'" :theme="previewDevice === 'tablet' ? 'gray' : ''" size="sm" :icon="Tablet" @click="previewDevice = 'tablet'" />
-          <Button :variant="previewDevice === 'mobile' ? 'solid' : 'ghost'" :theme="previewDevice === 'mobile' ? 'gray' : ''" size="sm" :icon="Smartphone" @click="previewDevice = 'mobile'" />
+          <Button :variant="previewDevice === 'desktop' ? 'solid' : 'ghost'" :theme="previewDevice === 'desktop' ? 'gray' : ''" size="sm" icon="monitor" @click="previewDevice = 'desktop'" />
+          <Button :variant="previewDevice === 'tablet' ? 'solid' : 'ghost'" :theme="previewDevice === 'tablet' ? 'gray' : ''" size="sm" icon="tablet" @click="previewDevice = 'tablet'" />
+          <Button :variant="previewDevice === 'mobile' ? 'solid' : 'ghost'" :theme="previewDevice === 'mobile' ? 'gray' : ''" size="sm" icon="smartphone" @click="previewDevice = 'mobile'" />
         </div>
       </div>
       
       <div class="flex-1 p-6 overflow-auto flex justify-center bg-gray-50 transition-all duration-300">
       <div
+        ref="previewRef"
         class="w-full rounded-lg border shadow-sm p-6 transition-all duration-300"
         :style="{
           maxWidth: previewDevice === 'desktop' ? tokens.form_max_width : previewDevice === 'tablet' ? '768px' : '375px',
@@ -332,43 +373,34 @@ function importTheme(file: File) {
         <h1 class="text-3xl font-bold mb-2">{{ editFormStore.formData?.title || 'Untitled Form' }}</h1>
         <p class="mb-6" :style="{ color: tokens.muted_text_color }">{{ editFormStore.formData?.description || 'Write a description for your form' }}</p>
 
-        <div class="flex flex-col gap-5">
-          <div v-for="field in editFormStore.fields" :key="field.fieldname" class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium">
-              {{ field.label }}
-              <span v-if="field.reqd" class="text-red-500">*</span>
-            </label>
-            <input
-              v-if="field.fieldtype !== 'Select' && field.fieldtype !== 'Text Editor'"
-              class="w-full border rounded px-3 py-2 text-sm transition-colors"
-              :style="{
-                borderColor: tokens.input_border_color,
-                borderRadius: tokens.input_radius,
-                backgroundColor: tokens.background_color,
-                color: tokens.text_color,
-              }"
-              :onfocus="(e: any) => { e.target.style.borderColor = tokens.input_focus_color; e.target.style.outline = 'none'; e.target.style.boxShadow = '0 0 0 2px ' + tokens.input_focus_color + '33'; }"
-              :onblur="(e: any) => { e.target.style.borderColor = tokens.input_border_color; e.target.style.boxShadow = 'none'; }"
-              :placeholder="field.placeholder || `Enter your ${field.label.toLowerCase()}`"
-              readonly
-            />
-            <select
-              v-else-if="field.fieldtype === 'Select'"
-              class="w-full border rounded px-3 py-2 text-sm transition-colors appearance-none bg-no-repeat bg-right"
-              style="background-image: url('data:image/svg+xml;utf8,<svg fill=\'%236B7280\' height=\'24\' viewBox=\'0 0 24 24\' width=\'24\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M7 10l5 5 5-5z\'/></svg>');"
-              :style="{
-                borderColor: tokens.input_border_color,
-                borderRadius: tokens.input_radius,
-                backgroundColor: tokens.background_color,
-                color: tokens.text_color,
-              }"
-              :onfocus="(e: any) => { e.target.style.borderColor = tokens.input_focus_color; e.target.style.outline = 'none'; e.target.style.boxShadow = '0 0 0 2px ' + tokens.input_focus_color + '33'; }"
-              :onblur="(e: any) => { e.target.style.borderColor = tokens.input_border_color; e.target.style.boxShadow = 'none'; }"
-              readonly
-            >
-              <option>Select an option</option>
-            </select>
-          </div>
+        <!--
+          The real field renderer, not a mock-up. The preview previously drew
+          its own <input> for everything except Select, so Switch, Rating,
+          Check, Date and even section headings all showed up as empty text
+          boxes that looked nothing like the published form.
+        -->
+        <div class="flex flex-col" :style="{ gap: tokens.field_gap }">
+          <template v-for="(row, rIdx) in previewRows" :key="`r-${rIdx}`">
+            <div class="flex flex-col md:flex-row gap-4">
+              <div
+                v-for="(col, cIdx) in row"
+                :key="`c-${cIdx}`"
+                class="flex flex-col gap-4 flex-1 min-w-0"
+              >
+                <FieldRenderer
+                  v-for="field in col"
+                  :key="field.fieldname"
+                  :field="field"
+                  :in-edit-mode="false"
+                  :disabled="true"
+                  :model-value="previewValues[field.fieldname]"
+                />
+              </div>
+            </div>
+          </template>
+          <p v-if="!previewRows.length" class="text-sm" :style="{ color: tokens.muted_text_color }">
+            Add fields on the Build tab to see them here.
+          </p>
         </div>
 
         <!-- Sample button -->

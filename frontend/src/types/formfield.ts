@@ -13,9 +13,17 @@ export type FormField = {
   idx?: number;
   conditional_logic?: string;
   field_key?: string;
-  source_type?: "Custom" | "Mapped";
+  source_type?: "Target Field" | "Form Field" | "Presentation" | "System";
   target_field?: string;
-  mapping_type?: "Direct" | "Expression" | "Webhook";
+  mapping_type?:
+    | "Direct"
+    | "Constant"
+    | "Transform"
+    | "Child Table"
+    | "Table MultiSelect"
+    | "Attach"
+    | "Attach Image"
+    | "No Target";
   row_index?: number;
   column_index?: number;
   cell_index?: number;

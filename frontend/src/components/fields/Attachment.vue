@@ -53,6 +53,15 @@ const handleChange = (file: FileType) => {
     inPreview.value = true;
 };
 
+// Guests can only upload when System Settings allows it, and the allowlist
+// there is keyed on this doctype — so tag the upload rather than leaving guest
+// uploads open site-wide.
+const uploadArgs = {
+    doctype: "FP Form Submission",
+    private: true,
+    folder: "Home/Attachments",
+};
+
 const handleRemove = () => {
     fileData.value = null;
     value.value = "";
@@ -61,7 +70,11 @@ const handleRemove = () => {
 </script>
 <template>
     <div class="flex gap-2 flex-col mt-2">
-        <FileUploader v-if="!inPreview" @success="(file: FileType) => handleChange(file)">
+        <FileUploader
+            v-if="!inPreview"
+            :upload-args="uploadArgs"
+            @success="(file: FileType) => handleChange(file)"
+        >
             <!-- @vue-ignore -->
             <template #default="{ uploading, progress, error, openFileSelector }">
                 <Button @click="openFileSelector()" :loading="uploading">

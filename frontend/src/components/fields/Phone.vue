@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { FormControl } from "frappe-ui";
 import { onClickOutside } from "@vueuse/core";
 
@@ -96,8 +96,10 @@ const countryOptions = computed(() => {
     }));
 });
 
-// Default to India if available, otherwise first country
+// Default to Switzerland if available, then India, otherwise first country
 const getDefaultCountryCode = (): string => {
+    const switzerland = availableCountries.value.find((c) => c.code === "CH");
+    if (switzerland) return "CH";
     const india = availableCountries.value.find((c) => c.code === "IN");
     return india ? "IN" : availableCountries.value[0]?.code || "";
 };
@@ -207,15 +209,59 @@ const handleCountryChange = (countryCode: string) => {
     updatePhoneValue();
 };
 
-// Watch phone number changes
+// Only these characters can appear in a phone number.
+const PHONE_DISALLOWED = /[^0-9\s()+-]/g;
+
+/**
+ * Block disallowed characters on the input element itself.
+ *
+ * Sanitising in the v-model handler is not enough: when the value is already
+ * "1515" and the user types "k", the component emits "1515k", we strip it back
+ * to "1515", and the ref does not change — so Vue never re-renders and the DOM
+ * keeps the typed letter. Rewriting the element's own value avoids that.
+ */
+const phoneFieldRef = ref<HTMLElement | null>(null);
+const phoneInputEl = ref<HTMLInputElement | null>(null);
+
+function sanitizeInputElement(el: HTMLInputElement) {
+    const clean = el.value.replace(PHONE_DISALLOWED, "");
+    if (clean === el.value) return;
+
+    // Keep the caret where the user expects after removing the character.
+    const caret = Math.max(0, (el.selectionStart ?? clean.length) - (el.value.length - clean.length));
+    el.value = clean;
+    el.setSelectionRange(caret, caret);
+}
+
+function onNativeInput(event: Event) {
+    const el = event.target as HTMLInputElement | null;
+    if (!el) return;
+    sanitizeInputElement(el);
+    phoneNumber.value = el.value;
+    updatePhoneValue();
+}
+
+onMounted(() => {
+    const root = phoneFieldRef.value;
+    const el = root?.querySelector<HTMLInputElement>('input[type="tel"], input');
+    if (!el) return;
+    phoneInputEl.value = el;
+    el.addEventListener("input", onNativeInput);
+    el.setAttribute("inputmode", "tel");
+});
+
+onUnmounted(() => {
+    phoneInputEl.value?.removeEventListener("input", onNativeInput);
+});
+
 const handlePhoneNumberChange = (value: string) => {
-    phoneNumber.value = value;
+    phoneNumber.value = (value ?? "").replace(PHONE_DISALLOWED, "");
     updatePhoneValue();
 };
 </script>
 
 <template>
-    <div class="flex flex-col gap-2">
+    <div ref="phoneFieldRef" class="flex flex-col gap-2">
         <div class="relative">
             <FormControl
                 :model-value="phoneNumber"
@@ -244,8 +290,8 @@ const handlePhoneNumberChange = (value: string) => {
                                 >{{ selectedCountry?.dialCode }}</span
                             >
                             <div class="flex flex-col ml-auto flex-shrink-0">
-                                <span class="lucide-chevron-up w-3 h-3 text-gray-500" aria-hidden="true" />
-                                <span class="lucide-chevron-down w-3 h-3 text-gray-500" aria-hidden="true" />
+                                <lucide-chevron-up class="w-3 h-3 text-gray-500" aria-hidden="true" />
+                                <lucide-chevron-down class="w-3 h-3 text-gray-500" aria-hidden="true" />
                             </div>
                         </button>
 

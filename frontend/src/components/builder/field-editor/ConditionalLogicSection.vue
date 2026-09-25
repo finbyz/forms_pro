@@ -8,7 +8,7 @@ import {
     Actions,
 } from "@/types/conditional-render.types";
 import { FormControl, Popover } from "frappe-ui";
-import { EllipsisVertical, Trash, Plus } from "@lucide/vue";
+
 import type { FormField } from "@/types/formfield";
 
 const editFormStore = useEditForm();
@@ -141,7 +141,7 @@ const showValueInput = (operator: ConditionalOperators) => {
             >
                 <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2 text-ink-gray-5 text-sm">
-                        <span class="lucide-workflow w-4 h-4" aria-hidden="true" />
+                        <lucide-workflow class="w-4 h-4" aria-hidden="true" />
                         <span>When</span>
                     </div>
                     <Popover>
@@ -150,7 +150,7 @@ const showValueInput = (operator: ConditionalOperators) => {
                                 variant="ghost"
                                 size="sm"
                                 @click="togglePopover"
-                                :icon="EllipsisVertical"
+                                :icon="'more-vertical'"
                                 tooltip="Actions"
                             />
                         </template>
@@ -163,7 +163,7 @@ const showValueInput = (operator: ConditionalOperators) => {
                                     theme="red"
                                     size="sm"
                                     @click="removeCondition(index)"
-                                    :icon-left="Trash"
+                                    :icon-left="'trash'"
                                     label="Remove"
                                     tooltip="Remove Condition"
                                 />
@@ -196,7 +196,7 @@ const showValueInput = (operator: ConditionalOperators) => {
 
             <!-- Actions -->
             <div class="flex items-center gap-2 text-ink-gray-5 text-sm">
-                <span class="lucide-zap w-4 h-4" aria-hidden="true" />
+                <lucide-zap class="w-4 h-4" aria-hidden="true" />
                 <span>Then</span>
             </div>
             <FormControl
@@ -219,7 +219,7 @@ const showValueInput = (operator: ConditionalOperators) => {
             variant="outline"
             size="sm"
             @click="addCondition"
-            :icon="Plus"
+            :icon="'plus'"
             tooltip="Add Condition"
         />
     </div>

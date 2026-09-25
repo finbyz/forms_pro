@@ -5,8 +5,8 @@ describe("Form Mapping Engine", () => {
         // Stub for mapping engine unit test
         const submission = { field_1: "John", field_2: "Doe" };
         const mapping_schema = [
-            { field_key: "field_1", target_field: "first_name", source_type: "Mapped" },
-            { field_key: "field_2", target_field: "last_name", source_type: "Mapped" }
+            { field_key: "field_1", target_field: "first_name", source_type: "Target Field" },
+            { field_key: "field_2", target_field: "last_name", source_type: "Target Field" }
         ];
         
         // Assertions would go here

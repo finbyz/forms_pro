@@ -96,9 +96,9 @@ class TestExportScopedByForm(IntegrationTestCase):
     def setUp(self) -> None:
         frappe.set_user("Administrator")
         # Two forms over the same linked DocType so we can prove the export
-        # is scoped by fp_linked_form, not by linked_doctype.
+        # is scoped by fp_linked_form, not by target_doctype.
         self.form_a = _create_form()
-        self.form_b = _create_form(linked_doctype=self.form_a.linked_doctype)
+        self.form_b = _create_form(target_doctype=self.form_a.target_doctype)
 
         self.row_a = _submit(self.form_a, full_name="Alice A", email_address="alice@example.com")
         self.row_b = _submit(self.form_b, full_name="Bob B", email_address="bob@example.com")
@@ -265,7 +265,7 @@ class TestExportAccessLog(IntegrationTestCase):
             "Administrator",
             "Access Log must be attributed to the caller, not the swapped user.",
         )
-        self.assertEqual(latest.export_from, form.linked_doctype)
+        self.assertEqual(latest.export_from, form.target_doctype)
 
 
 class TestExportSessionRestoration(IntegrationTestCase):

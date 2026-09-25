@@ -24,6 +24,14 @@ const emit = defineEmits<{
             class="bg-transparent border-none outline-none text-base focus:ring-0 w-full px-0 py-1"
         />
         <label class="text-base" v-else>{{ field.label }}</label>
-        <span class="lucide-asterisk w-4 h-4 text-red-400" aria-hidden="true" />
+        <!--
+          Only mandatory fields carry the asterisk. Without the guard every
+          field on the live form looked required, so the marker said nothing
+          and visitors could not tell what they actually had to fill in.
+        -->
+        <span v-if="field.reqd" class="flex items-center" title="Mandatory">
+            <lucide-asterisk class="w-4 h-4 text-red-400" aria-hidden="true" />
+            <span class="sr-only">required</span>
+        </span>
     </div>
 </template>

@@ -59,7 +59,90 @@ class Form(Document):
         if not self.title:
             self.title = "Untitled Form"
 
+    # DocTypes generated for a form live in this module; everything else
+    # (Contact, Lead, ...) belongs to the app and must never be rewritten here.
+    OWNED_MODULE = "User Forms"
+
+    def owns_target_doctype(self) -> bool:
+        if not self.target_doctype or not frappe.db.exists("DocType", self.target_doctype):
+            return False
+        module, custom, istable = frappe.db.get_value(
+            "DocType", self.target_doctype, ["module", "custom", "istable"]
+        )
+        return module == self.OWNED_MODULE and bool(custom) and not istable
+
+    def on_update(self) -> None:
+        if self.target_doctype:
+            # Traceability plumbing: without these the desk cannot link a record
+            # back to its submission and export finds nothing.
+            from forms_pro.services.authoring.target_fields import ensure_tracking_fields
+
+            ensure_tracking_fields(self)
+
+        if self.owns_target_doctype():
+            self.sync_owned_doctype()
+        elif self.create_target_fields:
+            # Opt-in: mirror unmapped fields onto a DocType we do not own
+            # (Contact, Lead, ...) as Custom Fields in their own tab.
+            from forms_pro.services.authoring.target_fields import sync_target_custom_fields
+
+            sync_target_custom_fields(self)
+
+    def sync_owned_doctype(self) -> None:
+        """
+        Mirror the form's fields onto the DocType the form owns, so submissions
+        land in real columns instead of an empty record.
+
+        Only additive: columns for removed fields are left alone rather than
+        dropping data that has already been collected.
+        """
+        from forms_pro.forms_pro.doctype.form_field.form_field import _DISPLAY_ONLY_FIELDTYPES
+
+        doctype_doc = frappe.get_doc("DocType", self.target_doctype)
+        existing = {f.fieldname: f for f in doctype_doc.fields}
+        changed = False
+
+        # Link/Table columns are invalid without a target DocType, and Frappe
+        # rejects the whole DocType save with DoctypeLinkError. A freshly added
+        # Table field has no child DocType yet, so skip it until it is
+        # configured rather than failing every save in between.
+        NEEDS_OPTIONS = ("Link", "Table", "Table MultiSelect")
+
+        for field in self.fields:
+            if field.fieldtype in _DISPLAY_ONLY_FIELDTYPES or not field.fieldname:
+                continue
+
+            wanted = field.to_frappe_field
+
+            if wanted["fieldtype"] in NEEDS_OPTIONS and not (wanted.get("options") or "").strip():
+                continue
+            current = existing.get(field.fieldname)
+
+            if current is None:
+                doctype_doc.append("fields", wanted)
+                changed = True
+            else:
+                for prop in ("label", "fieldtype", "reqd", "options"):
+                    if prop in wanted and current.get(prop) != wanted[prop]:
+                        current.set(prop, wanted[prop])
+                        changed = True
+
+            # A field on a form-owned DocType is always bound to its own column.
+            if field.source_type != "Target Field" or field.target_field != field.fieldname:
+                field.db_set("source_type", "Target Field", update_modified=False)
+                field.db_set("target_field", field.fieldname, update_modified=False)
+                field.db_set("mapping_type", "Direct", update_modified=False)
+
+        if changed:
+            doctype_doc.save(ignore_permissions=True)
+            frappe.clear_document_cache("DocType", self.target_doctype)
+
     def validate(self) -> None:
+        # Access Mode is the control users actually see; login_required is what
+        # the router enforces. Keeping them in step here stops a form reading
+        # "Public" in the builder while bouncing visitors to /login.
+        self.login_required = 0 if (self.access_mode or "Public") == "Public" else 1
+
         if self.target_doctype:
             if not frappe.db.exists("DocType", self.target_doctype):
                 frappe.throw(_("Target DocType {0} does not exist").format(self.target_doctype))

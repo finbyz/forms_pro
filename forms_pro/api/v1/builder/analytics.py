@@ -11,7 +11,9 @@ def summary(form_name: str, start_date: str | None = None, end_date: str | None 
 
     filters: dict = {"form": form_name}
     if start_date and end_date:
-        filters["submitted_at"] = ["between", [start_date, end_date]]
+        start_val = f"{start_date} 00:00:00" if len(start_date) == 10 else start_date
+        end_val = f"{end_date} 23:59:59" if len(end_date) == 10 else end_date
+        filters["submitted_at"] = ["between", [start_val, end_val]]
 
     submissions = frappe.get_all(
         "FP Form Submission",
@@ -41,6 +43,9 @@ def timeseries(form_name: str, start_date: str, end_date: str):
     """Get daily submission counts between dates."""
     frappe.has_permission("Form", ptype="read", throw=True)
 
+    start_val = f"{start_date} 00:00:00" if len(start_date) == 10 else start_date
+    end_val = f"{end_date} 23:59:59" if len(end_date) == 10 else end_date
+
     results = frappe.db.sql(
         """
         SELECT DATE(submitted_at) as date, COUNT(*) as count
@@ -50,7 +55,7 @@ def timeseries(form_name: str, start_date: str, end_date: str):
         GROUP BY DATE(submitted_at)
         ORDER BY DATE(submitted_at)
         """,
-        (form_name, start_date, end_date),
+        (form_name, start_val, end_val),
         as_dict=True,
     )
 

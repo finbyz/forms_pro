@@ -1,19 +1,53 @@
 <script setup lang="ts">
-import { Checkbox, Switch, Rating, TextEditor } from "frappe-ui";
+import { Checkbox, Switch, Rating, TextEditor, createResource } from "frappe-ui";
 import { Fieldtype } from "@/types/formfield";
 import { getFieldTypeDef } from "@/config/fieldTypes";
 import { formatDate, formatDateTime, formatTime } from "@/utils/date";
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { isHeading, isPageBreak } from "@/utils/form_fields";
 import Heading from "@/components/fields/Heading.vue";
+import SubmissionTableValue from "@/components/form/submissions/SubmissionTableValue.vue";
 
 const props = defineProps<{
     fieldname: string;
     label: string;
     description?: string;
     fieldtype: Fieldtype;
+    options?: string;
     value: any;
 }>();
+
+/**
+ * A Language value is stored as a code ("de"), so show the native name the
+ * submitter actually picked. Falls back to the raw code if the list has not
+ * arrived or the language was since disabled.
+ */
+const languageNames = ref<Record<string, string>>({});
+const languageLabel = computed(() => {
+    if (!props.value) return "–";
+    return languageNames.value[String(props.value)] || String(props.value);
+});
+
+onMounted(async () => {
+    if (props.fieldtype !== Fieldtype.LANGUAGE) return;
+    try {
+        const data = await createResource({ url: "forms_pro.api.form.get_languages" }).fetch();
+        languageNames.value = Object.fromEntries(
+            (data ?? []).map((l: { value: string; label: string }) => [l.value, l.label])
+        );
+    } catch {
+        // keep showing the code
+    }
+});
+
+const isTableField = computed(() => {
+    return (
+        props.fieldtype === Fieldtype.TABLE ||
+        props.fieldtype === ("Table" as any) ||
+        props.fieldtype === ("Child Table" as any) ||
+        props.fieldtype === ("Table MultiSelect" as any)
+    );
+});
 
 const formattedDateValue = computed(() => {
     if (!props.value) return "";
@@ -77,6 +111,13 @@ const classNames = computed<string>(() =>
 
 <template>
     <div v-if="isPageBreak(fieldtype)" />
+    <SubmissionTableValue
+        v-else-if="isTableField"
+        :label="label"
+        :description="description"
+        :options="options"
+        :value="value"
+    />
     <div v-else :class="classNames">
         <div v-if="!isHeading(fieldtype)">
             <span class="text-sm text-ink-gray-5">{{ label }}</span>
@@ -123,6 +164,10 @@ const classNames = computed<string>(() =>
 
         <span v-else-if="fieldtype === Fieldtype.MULTISELECT" class="text-sm text-ink-gray-7">
             {{ parsedMultiselectValue }}
+        </span>
+
+        <span v-else-if="fieldtype === Fieldtype.LANGUAGE" class="text-sm text-ink-gray-7">
+            {{ languageLabel }}
         </span>
 
         <span

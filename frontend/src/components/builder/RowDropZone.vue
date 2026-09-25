@@ -54,7 +54,8 @@ async function onZoneChange(evt: any) {
         data-form-builder-component="row-drop-zone"
         :data-at-row="props.atRow"
         :class="[
-            'relative h-3 w-full',
+            'relative w-full transition-[height] duration-150 ease-out motion-reduce:transition-none',
+            isDragging ? 'h-7 -my-2' : 'h-3',
             'before:content-[\'\'] before:absolute before:inset-x-0 before:top-1/2 before:-translate-y-1/2 before:rounded-full before:transition-[height,background-color] before:duration-150 before:ease-out motion-reduce:before:transition-none',
             isHighlighted
                 ? 'before:h-1 before:bg-surface-blue-3'

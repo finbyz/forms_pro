@@ -10,6 +10,14 @@ from forms_pro.utils.form_generator import FormGenerator
 from forms_pro.utils.teams import get_user_teams
 
 
+def _unique_form_name() -> str:
+    """
+    The form name doubles as the DocType name, so it must be unique per run
+    and legal as a DocType name (letters, digits, spaces, _ and -).
+    """
+    return "Zz Gen " + frappe.utils.random_string(8)
+
+
 class IntegrationTestFormGenerator(IntegrationTestCase):
     def setUp(self):
         super().setUp()
@@ -30,7 +38,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         test_doctype.insert(ignore_permissions=True)
 
         # Initialize FormGenerator with existing DocType
-        form_generator = FormGenerator(linked_doctype=test_doctype.name, team_id=self.test_team)
+        form_generator = FormGenerator(target_doctype=test_doctype.name, team_id=self.test_team)
 
         # Assertions
         self.assertIsNotNone(form_generator.doctype)
@@ -68,14 +76,15 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
 
     def test_generate_creates_doctype_when_none_provided(self):
         """Test that generate() creates a new DocType when none is provided"""
-        form_generator = FormGenerator(team_id=self.test_team)
+        form_name = _unique_form_name()
+        form_generator = FormGenerator(team_id=self.test_team, form_name=form_name)
 
         # Call generate method
         form_generator.generate()
 
         # Assertions
         self.assertIsNotNone(form_generator.doctype)
-        self.assertTrue(form_generator.doctype.name.startswith("formspro_"))
+        self.assertEqual(form_generator.doctype.name, form_name)
         self.assertEqual(form_generator.doctype.module, "User Forms")
         self.assertTrue(form_generator.doctype.custom)
         self.assertTrue(form_generator.doctype.track_changes)
@@ -94,7 +103,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         test_doctype.custom = True
         test_doctype.insert(ignore_permissions=True)
 
-        form_generator = FormGenerator(linked_doctype=test_doctype.name, team_id=self.test_team)
+        form_generator = FormGenerator(target_doctype=test_doctype.name, team_id=self.test_team)
 
         # Call generate method
         form_generator.generate()
@@ -105,21 +114,23 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
 
     def test_generate_creates_form_document(self):
         """Test that generate() creates a Form document"""
-        form_generator = FormGenerator(team_id=self.test_team)
+        form_name = _unique_form_name()
+        form_generator = FormGenerator(team_id=self.test_team, form_name=form_name)
 
         # Call generate method
         form_generator.generate()
 
         # Assertions
         self.assertIsNotNone(form_generator.form_document)
-        self.assertEqual(form_generator.form_document.linked_doctype, form_generator.doctype.name)
+        self.assertEqual(form_generator.form_document.target_doctype, form_generator.doctype.name)
 
         # Verify Form document exists in database
         self.assertTrue(frappe.db.exists("Form", form_generator.form_document.name))
 
     def test_generate_complete_flow(self):
         """Test the complete flow of FormGenerator.generate()"""
-        form_generator = FormGenerator(team_id=self.test_team)
+        form_name = _unique_form_name()
+        form_generator = FormGenerator(team_id=self.test_team, form_name=form_name)
 
         # Call generate method
         form_generator.generate()
@@ -127,14 +138,14 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         # Assertions for complete flow
         self.assertIsNotNone(form_generator.doctype)
         self.assertIsNotNone(form_generator.form_document)
-        self.assertEqual(form_generator.form_document.linked_doctype, form_generator.doctype.name)
+        self.assertEqual(form_generator.form_document.target_doctype, form_generator.doctype.name)
 
         # Verify both documents exist in database
         self.assertTrue(frappe.db.exists("DocType", form_generator.doctype.name))
         self.assertTrue(frappe.db.exists("Form", form_generator.form_document.name))
 
         # Verify DocType properties
-        self.assertTrue(form_generator.doctype.name.startswith("formspro_"))
+        self.assertEqual(form_generator.doctype.name, form_name)
         self.assertEqual(form_generator.doctype.module, "User Forms")
         self.assertTrue(form_generator.doctype.custom)
 
@@ -147,7 +158,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         test_doctype.custom = True
         test_doctype.insert(ignore_permissions=True)
 
-        form_generator = FormGenerator(linked_doctype=test_doctype.name, team_id=self.test_team)
+        form_generator = FormGenerator(target_doctype=test_doctype.name, team_id=self.test_team)
 
         # Call generate method
         form_generator.generate()
@@ -155,7 +166,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         # Assertions
         self.assertEqual(form_generator.doctype.name, test_doctype.name)
         self.assertIsNotNone(form_generator.form_document)
-        self.assertEqual(form_generator.form_document.linked_doctype, form_generator.doctype.name)
+        self.assertEqual(form_generator.form_document.target_doctype, form_generator.doctype.name)
 
         # Verify Form document exists in database
         self.assertTrue(frappe.db.exists("Form", form_generator.form_document.name))
@@ -163,7 +174,8 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
     def test_generate_creates_doctype_docshare(self):
         """Test that generate() creates DocShare for the DocType with correct permissions"""
         frappe.set_user(self.test_user)
-        form_generator = FormGenerator(team_id=self.test_team)
+        form_name = _unique_form_name()
+        form_generator = FormGenerator(team_id=self.test_team, form_name=form_name)
 
         # Call generate method
         form_generator.generate()
@@ -190,7 +202,8 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
     def test_generate_creates_form_docshare(self):
         """Test that generate() creates DocShare for the Form document with correct permissions"""
         frappe.set_user(self.test_user)
-        form_generator = FormGenerator(team_id=self.test_team)
+        form_name = _unique_form_name()
+        form_generator = FormGenerator(team_id=self.test_team, form_name=form_name)
 
         # Call generate method
         form_generator.generate()
@@ -276,7 +289,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         test_doctype.insert(ignore_permissions=True)
 
         frappe.set_user(self.test_user)
-        form_generator = FormGenerator(linked_doctype=test_doctype.name, team_id=self.test_team)
+        form_generator = FormGenerator(target_doctype=test_doctype.name, team_id=self.test_team)
         form_generator.generate()
 
         # Assertions
@@ -318,7 +331,7 @@ class IntegrationTestFormGenerator(IntegrationTestCase):
         test_doctype.insert(ignore_permissions=True)
 
         frappe.set_user(self.test_user)
-        form_generator = FormGenerator(linked_doctype=test_doctype.name, team_id=self.test_team)
+        form_generator = FormGenerator(target_doctype=test_doctype.name, team_id=self.test_team)
         form_generator.generate()
 
         # Assertions

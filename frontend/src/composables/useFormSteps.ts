@@ -1,18 +1,23 @@
 import { computed, ref, type Ref, type ComputedRef } from "vue";
 import type { FormField } from "@/types/formfield";
-import { groupFieldsIntoSteps, type FormStep } from "@/utils/form_steps";
+import { groupFieldsIntoSteps, type FormStep, type GroupFieldsOptions } from "@/utils/form_steps";
 
-export type { FormStep };
+export type { FormStep, GroupFieldsOptions };
 
 export function useFormSteps(
-  allFields: Ref<FormField[]> | ComputedRef<FormField[]>
+  allFields: Ref<FormField[]> | ComputedRef<FormField[]>,
+  options?: GroupFieldsOptions
 ) {
   const currentStepIndex = ref(0);
 
   const steps = computed<FormStep[]>(() =>
     // Always at least one step, even for a fieldless form — isLastStep must
     // hold on step 0 or the Submit button never renders.
-    groupFieldsIntoSteps(allFields.value, { alwaysIncludeTrailing: true })
+    groupFieldsIntoSteps(allFields.value, {
+      alwaysIncludeTrailing: true,
+      labelFallback: (n) => `Step ${n}`,
+      ...options,
+    })
   );
 
   const isMultiStep = computed(() => steps.value.length > 1);

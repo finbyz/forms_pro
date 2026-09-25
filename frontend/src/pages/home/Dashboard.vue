@@ -1,5 +1,36 @@
 <template>
     <Dialog
+        v-model="showNameDialog"
+        :options="{ title: 'Name your form' }"
+    >
+        <template #body-content>
+            <div class="flex flex-col gap-2">
+                <FormControl
+                    v-model="newFormName"
+                    type="text"
+                    label="Form name"
+                    placeholder="e.g. Solar Enquiry Form"
+                    :disabled="creating"
+                    @blur="verifyName"
+                    @keyup.enter="confirmCreateForm"
+                />
+                <p class="text-xs text-ink-gray-5">
+                    This is also used as the DocType name, so it must be unique.
+                </p>
+                <p v-if="nameError" class="text-xs text-ink-red-4">{{ nameError }}</p>
+            </div>
+        </template>
+        <template #actions>
+            <Button
+                class="w-full"
+                variant="solid"
+                :loading="creating || checkingName"
+                :disabled="!newFormName.trim() || creating"
+                @click="confirmCreateForm"
+            >Create</Button>
+        </template>
+    </Dialog>
+    <Dialog
         v-model="showSelectDoctypeDialog"
         :options="{
             title: 'Select DocType',
@@ -11,8 +42,9 @@
                 <Combobox
                     v-model="selectedDoctype"
                     :options="doctypesOptions"
-                    label="DocType"
-                    id="doctype"
+                    placeholder="Search or select DocType..."
+                    :open-on-click="true"
+                    :open-on-focus="true"
                 />
             </div>
         </template>
@@ -20,14 +52,10 @@
             <Button
                 class="w-full"
                 variant="solid"
-                :disabled="!selectedDoctype"
-                @click="
-                    () => {
-                        handleCreateDraftFormWithDoctype();
-                    }
-                "
-                >Create</Button
-            >
+                :loading="creatingWithDoctype"
+                :disabled="!selectedDoctype || creatingWithDoctype"
+                @click="handleCreateDraftFormWithDoctype"
+            >Create</Button>
         </template>
     </Dialog>
     <div class="flex flex-col gap-4 w-full overflow-y-auto">
@@ -51,9 +79,7 @@
                     },
                     {
                         label: 'Create from Existing DocType',
-                        onClick: () => {
-                            showSelectDoctypeDialog = true;
-                        },
+                        onClick: handleOpenSelectDoctypeDialog,
                     },
                 ]"
             />
@@ -69,7 +95,10 @@
             <p class="text-sm" v-else-if="!teamForms.data || teamForms.data.length === 0">
                 No forms created yet
             </p>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-else>
+            <div
+                class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                v-else
+            >
                 <div v-for="form in teamForms.data" :key="form.name">
                     <FormPreviewCard :form="form" />
                 </div>
@@ -83,12 +112,29 @@ import { useRouter } from "vue-router";
 import { ref, watch, computed } from "vue";
 import { toast } from "vue-sonner";
 import { useUser } from "@/stores/user";
-import { Dropdown, Dialog, createResource, Combobox, Breadcrumbs } from "frappe-ui";
-import { createNewFormWithDoctype, createNewForm } from "@/utils/form_generator";
+import {
+    Dropdown,
+    Dialog,
+    createResource,
+    Combobox,
+    Breadcrumbs,
+    FormControl,
+} from "frappe-ui";
+import {
+    createNewFormWithDoctype,
+    createNewForm,
+    checkFormNameAvailable,
+} from "@/utils/form_generator";
 import FormPreviewCard from "@/components/dashboard/FormPreviewCard.vue";
 const router = useRouter();
 const showSelectDoctypeDialog = ref(false);
 const selectedDoctype = ref<string | null>(null);
+const showNameDialog = ref(false);
+const newFormName = ref("");
+const nameError = ref("");
+const checkingName = ref(false);
+const creating = ref(false);
+const creatingWithDoctype = ref(false);
 const user = useUser();
 
 const breadcrumbItems = ref([{ label: "Manage" }, { label: "All Forms" }]);
@@ -102,30 +148,87 @@ const doctypesOptions = computed(() => doctypesList.data || []);
 
 const handleCreateDraftFormWithDoctype = async () => {
     if (!selectedDoctype.value || !user.currentTeam?.name) {
-        toast.error("Error occured while creating form. Check DocType Selected.");
+        toast.error("Error occurred while creating form. Check DocType Selected.");
         return;
     }
-    const data = await createNewFormWithDoctype(selectedDoctype.value, user.currentTeam.name);
-    router.push({
-        name: "Edit Form",
-        params: {
-            id: data.form_document,
-        },
-    });
+    creatingWithDoctype.value = true;
+    try {
+        const data = await createNewFormWithDoctype(selectedDoctype.value, user.currentTeam.name);
+        showSelectDoctypeDialog.value = false;
+        const formDoc = data.form_document;
+        selectedDoctype.value = null;
+        router.push({
+            name: "Edit Form",
+            params: {
+                id: formDoc,
+            },
+        });
+    } catch (e: any) {
+        toast.error(e?.message ?? "Error occurred while creating form.");
+    } finally {
+        creatingWithDoctype.value = false;
+    }
 };
 
-const handleCreateDraftForm = async () => {
+const handleOpenSelectDoctypeDialog = () => {
+    selectedDoctype.value = null;
+    if (!doctypesList.data?.length) {
+        doctypesList.fetch();
+    }
+    showSelectDoctypeDialog.value = true;
+};
+
+const handleCreateDraftForm = () => {
     if (!user.currentTeam?.name) {
         toast.error("Error occured while creating form. User has no default team.");
         return;
     }
-    const data = await createNewForm(user.currentTeam.name);
-    router.push({
-        name: "Edit Form",
-        params: {
-            id: data.form_document,
-        },
-    });
+    newFormName.value = "";
+    nameError.value = "";
+    showNameDialog.value = true;
+};
+
+// The name becomes the DocType name, so check before creating rather than
+// letting the insert fail.
+const verifyName = async () => {
+    const name = newFormName.value.trim();
+    nameError.value = "";
+    if (!name) return false;
+    checkingName.value = true;
+    try {
+        const res = await checkFormNameAvailable(name);
+        if (!res.available) {
+            nameError.value = `"${res.name}" already exists. Please choose another name.`;
+            return false;
+        }
+        return true;
+    } catch (e: any) {
+        nameError.value = e?.message ?? "Could not verify the name.";
+        return false;
+    } finally {
+        checkingName.value = false;
+    }
+};
+
+const confirmCreateForm = async () => {
+    if (!user.currentTeam?.name) return;
+    const name = newFormName.value.trim();
+    if (!name) {
+        nameError.value = "Please enter a form name.";
+        return;
+    }
+    if (!(await verifyName())) return;
+
+    creating.value = true;
+    try {
+        const data = await createNewForm(user.currentTeam.name, name);
+        showNameDialog.value = false;
+        router.push({ name: "Edit Form", params: { id: data.form_document } });
+    } catch (e: any) {
+        nameError.value = e?.message ?? "Could not create the form.";
+    } finally {
+        creating.value = false;
+    }
 };
 
 const teamForms = createResource({
@@ -158,4 +261,10 @@ watch(
     },
     { immediate: true }
 );
+
+watch(showSelectDoctypeDialog, (open) => {
+    if (!open) {
+        selectedDoctype.value = null;
+    }
+});
 </script>

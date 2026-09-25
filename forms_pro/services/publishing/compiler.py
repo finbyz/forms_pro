@@ -15,15 +15,21 @@ class FormCompiler:
         mapping_json = json.dumps(mapping, separators=(",", ":"))
         
         # Calculate schema hash
-        hash_payload = schema_json + mapping_json
+        theme_json = self.form_doc.theme_overrides_json or "{}"
+        success_schema_json = self.form_doc.success_schema_json or "{}"
+
+        # The hash decides whether the builder offers "Update published form".
+        # Theme and success-page edits change what visitors see, so they have to
+        # be part of it — otherwise a design change never looks publishable.
+        hash_payload = schema_json + mapping_json + theme_json + success_schema_json
         schema_hash = hashlib.sha256(hash_payload.encode("utf-8")).hexdigest()
-        
+
         return {
             "schema_json": schema_json,
             "mapping_json": mapping_json,
             "schema_hash": schema_hash,
-            "theme_json": self.form_doc.theme_overrides_json or "{}",
-            "success_schema_json": self.form_doc.success_schema_json or "{}",
+            "theme_json": theme_json,
+            "success_schema_json": success_schema_json,
             "runtime_settings_json": json.dumps({
                 "access_mode": self.form_doc.access_mode,
                 "record_strategy": self.form_doc.record_strategy,
@@ -31,23 +37,43 @@ class FormCompiler:
             })
         }
         
+    # Everything the public renderer needs. The snapshot is what visitors are
+    # served, so dropping a property here silently changes the live form:
+    # layout indices, help text and conditional logic all have to be captured.
+    SCHEMA_FIELD_PROPS = (
+        "field_key",
+        "fieldname",
+        "label",
+        "fieldtype",
+        "reqd",
+        "hidden",
+        "options",
+        "default",
+        "description",
+        "conditional_logic",
+        "row_index",
+        "column_index",
+        "cell_index",
+        "idx",
+    )
+
     def _build_schema(self):
         fields = []
         for field in self.form_doc.get("fields"):
-            fields.append({
-                "field_key": field.field_key,
-                "fieldname": field.fieldname,
-                "label": field.label,
-                "fieldtype": field.fieldtype,
-                "required": field.reqd,
-                "hidden": field.hidden,
-                "options": field.options,
-                "default": field.default
-            })
+            snapshot = {prop: field.get(prop) for prop in self.SCHEMA_FIELD_PROPS}
+            # `required` kept as an alias for older consumers of the snapshot.
+            snapshot["required"] = field.reqd
+            fields.append(snapshot)
+
         return {
             "title": self.form_doc.title,
             "route": self.form_doc.route,
-            "fields": fields
+            "description": self.form_doc.description,
+            "success_title": self.form_doc.success_title,
+            "success_description": self.form_doc.success_description,
+            "allow_incomplete": self.form_doc.allow_incomplete,
+            "login_required": self.form_doc.login_required,
+            "fields": fields,
         }
 
     def _build_mapping(self):
@@ -57,7 +83,7 @@ class FormCompiler:
                 fields.append({
                     "field_key": field.field_key,
                     "mapping_type": field.mapping_type,
-                    "target_fieldname": field.target_fieldname
+                    "target_fieldname": field.target_field
                 })
         return {
             "target_doctype": self.form_doc.target_doctype,
@@ -88,5 +114,6 @@ class FormCompiler:
         
         self.form_doc.db_set("status", "Published")
         self.form_doc.db_set("active_version", version_doc.name)
+        self.form_doc.db_set("is_published", 1)
         
         return version_doc

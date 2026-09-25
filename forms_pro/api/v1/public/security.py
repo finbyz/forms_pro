@@ -1,48 +1,43 @@
+"""Public-endpoint guards: CAPTCHA and rate limiting.
+
+The CAPTCHA logic itself lives in forms_pro.services.security.captcha; this
+module only turns its result into the HTTP-facing error.
+"""
+
 import frappe
-import requests
+from frappe import _
 
-def verify_captcha(token):
-    settings = frappe.get_doc("Forms Pro Settings")
-    if not settings.require_captcha_for_public_forms:
-        return True
-        
-    if not token:
-        frappe.throw("CAPTCHA token is missing.", exc=frappe.PermissionError)
-        
-    secret_key = settings.get_password("recaptcha_secret_key")
-    if not secret_key:
-        # If no secret is configured, allow pass-through or fail closed depending on policy
-        frappe.log_error("Forms Pro CAPTCHA secret key is not configured.", "Forms Pro Security")
-        return True
-        
-    response = requests.post(
-        "https://www.google.com/recaptcha/api/siteverify",
-        data={
-            "secret": secret_key,
-            "response": token,
-            "remoteip": frappe.local.request_ip
-        }
-    )
-    
-    result = response.json()
-    if not result.get("success"):
-        frappe.throw("CAPTCHA verification failed.", exc=frappe.PermissionError)
-        
-    score = result.get("score", 0)
-    threshold = settings.default_score_threshold or 0.5
-    
-    if score < threshold:
-        frappe.throw("CAPTCHA score too low. Suspicious activity detected.", exc=frappe.PermissionError)
-        
-    return True
+from forms_pro.services.security import captcha as captcha_service
 
-def check_rate_limit(route):
-    # 10 requests per minute per IP per form
+RATE_LIMIT_PER_MINUTE = 10
+
+
+def verify_captcha(token: str | None, action: str = "submit", form_captcha: int | None = None):
+    """
+    Verify a submission's CAPTCHA token.
+
+    Returns the score when verification passes, or None when CAPTCHA is turned
+    off. Throws PermissionError otherwise.
+    """
+    if not captcha_service.is_enabled(form_captcha):
+        return None
+
+    try:
+        return captcha_service.verify(token, action=action)
+    except captcha_service.CaptchaError as exc:
+        frappe.throw(_(str(exc)), exc=frappe.PermissionError)
+
+
+def check_rate_limit(route: str):
+    """Cap submissions per IP per form so a public endpoint can't be hammered."""
     ip = frappe.local.request_ip
     cache_key = f"forms_pro_rate_limit:{route}:{ip}"
-    
+
     count = frappe.cache().get_value(cache_key) or 0
-    if count >= 10:
-        frappe.throw("Too many requests. Please try again later.", exc=frappe.PermissionError)
-        
-    frappe.cache().set_value(cache_key, count + 1, expires_in_sec=60)
+    if int(count) >= RATE_LIMIT_PER_MINUTE:
+        frappe.throw(
+            _("Too many requests. Please try again later."),
+            exc=frappe.PermissionError,
+        )
+
+    frappe.cache().set_value(cache_key, int(count) + 1, expires_in_sec=60)

@@ -141,17 +141,7 @@ The project includes automated testing via GitHub Actions:
 
 ### Running Tests Locally
 
-The test suite uses [frappe_factory_bot](https://github.com/harshtandiya/frappe_factory_bot) for test data factories. You must install it on your bench before running tests.
-
-**1. Install frappe_factory_bot:**
-
-```bash
-cd $PATH_TO_YOUR_BENCH
-bench get-app https://github.com/harshtandiya/frappe_factory_bot.git --branch main
-bench --site <your-site> install-app frappe_factory_bot
-```
-
-**2. Run the tests:**
+The test suite includes self-contained test data factories. No external factory bot app is required.
 
 ```bash
 # Run all Forms Pro tests

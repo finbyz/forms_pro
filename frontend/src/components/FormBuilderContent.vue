@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { LoadingIndicator, TextEditor } from "frappe-ui";
+import { computed, defineAsyncComponent, ref } from "vue";
+import { LoadingIndicator } from "frappe-ui";
+
+// Same reason as the field registry: keep ProseMirror out of the eager graph.
+const TextEditor = defineAsyncComponent(() => import("frappe-ui-text-editor"));
 import { onClickOutside, useEventListener } from "@vueuse/core";
 import draggableComponent from "vuedraggable";
 
@@ -16,10 +19,12 @@ import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
 const editFormStore = useEditForm();
 
 const fieldContentRef = ref<HTMLElement | null>(null);
-const isDraggingField = ref(false);
+const isDraggingField = computed(() => editFormStore.isDraggingField);
+// SortableJS needs a backing list for the empty-canvas drop target.
+const emptyBuffer = ref<FormField[]>([]);
 
 function resetDragState() {
-    isDraggingField.value = false;
+    editFormStore.setDragging(false);
 }
 
 useEventListener(document, "pointerup", () => {
@@ -47,6 +52,27 @@ function colIndexOf(col: FormField[], cIdx: number): number {
     return col[0]?.column_index ?? cIdx;
 }
 
+/**
+ * A drop can carry either an existing form field (a move) or a clone of a
+ * DocType field from the sidebar (a new field). The store's positioning
+ * helpers only accept fields already in doc.fields, so materialize first.
+ */
+function resolveDropped(element: any): FormField | null {
+    if (!element) return null;
+    if (editFormStore.isFormField(element)) return element;
+    if (element.__fromDoctype) return editFormStore.materializeDoctypeField(element);
+    if (element.__newFieldtype) return editFormStore.materializeNewField(element.__newFieldtype);
+    return null;
+}
+
+function onEmptyCanvasDrop(evt: any) {
+    if (!evt.added) return;
+    const field = resolveDropped(evt.added.element);
+    if (field) editFormStore.insertNewRow(field, 0);
+    emptyBuffer.value = [];
+    resetDragState();
+}
+
 function onCellChange(evt: any, rowIndex: number, colIndex: number) {
     if (evt.moved) {
         // Reorder cells within same column: renumber cell_index by new position
@@ -66,19 +92,22 @@ function onCellChange(evt: any, rowIndex: number, colIndex: number) {
         });
     } else if (evt.added) {
         // Field dropped into this column from elsewhere — stack into column at cell index
-        editFormStore.insertCell(evt.added.element, rowIndex, colIndex, evt.added.newIndex);
+        const field = resolveDropped(evt.added.element);
+        if (field) editFormStore.insertCell(field, rowIndex, colIndex, evt.added.newIndex);
         resetDragState();
     }
     // evt.removed: no-op — target column's evt.added owns the move
 }
 
-function onColumnZoneDrop(field: FormField, atRow: number, atCol: number) {
-    editFormStore.moveField(field, atRow, atCol);
+function onColumnZoneDrop(dropped: FormField, atRow: number, atCol: number) {
+    const field = resolveDropped(dropped);
+    if (field) editFormStore.moveField(field, atRow, atCol);
     resetDragState();
 }
 
-function onRowZoneDrop(field: FormField, atRow: number) {
-    editFormStore.insertNewRow(field, atRow);
+function onRowZoneDrop(dropped: FormField, atRow: number) {
+    const field = resolveDropped(dropped);
+    if (field) editFormStore.insertNewRow(field, atRow);
     resetDragState();
 }
 
@@ -126,7 +155,7 @@ const isDropdownOrPopover = (element: Element | null): boolean => {
 };
 
 useEventListener("keydown", (event: KeyboardEvent) => {
-    if (event.metaKey && event.key === "s") {
+    if ((event.metaKey || event.ctrlKey) && event.key === "s") {
         event.preventDefault();
         editFormStore.save();
     }
@@ -170,121 +199,141 @@ onClickOutside(fieldContentRef, (event) => {
 </script>
 
 <template>
-    <div class="flex flex-col flex-1 min-w-0 h-full overflow-y-auto bg-surface-gray-1">
+    <div class="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-surface-gray-1">
         <div v-if="editFormStore.isLoading" class="flex items-center justify-center h-full">
             <LoadingIndicator />
         </div>
         <template v-else>
-            <div class="flex-none flex justify-center w-full bg-surface-gray-1 pt-6 px-6 pb-2">
+            <!-- Sticky section nav bar -->
+            <div class="shrink-0 flex justify-center w-full bg-surface-gray-1 border-b border-outline-gray-1 px-6 py-1">
                 <SectionNavBar v-if="editFormStore.formData" class="max-w-[960px] w-full" />
             </div>
-            
-            <div v-if="editFormStore.formData && editFormStore.activeSectionIndex === 'success'" class="flex-1 w-full overflow-hidden bg-white">
-                <SuccessCanvas />
-            </div>
 
-            <div
-                v-else-if="editFormStore.formData"
-                ref="fieldContentRef"
-                class="flex-1 w-full max-w-[960px] mx-auto bg-surface-base border border-outline-gray-1 rounded-6 shadow-sm my-4 mb-40"
-            >
-                <div class="p-8">
-                    <div class="flex flex-col gap-3 mb-8">
-                        <input
-                            type="text"
-                            class="outline-none bg-transparent border-none text-2xl-semibold text-ink-gray-9 focus:ring-0 p-0 placeholder:text-ink-gray-4"
-                            placeholder="Untitled Form"
-                            v-model="editFormStore.formData.title"
-                        />
-                        <TextEditor
-                            :content="editFormStore.formData.description"
-                            editor-class="h-fit !w-full form-description text-ink-gray-7"
-                            placeholder="Write a description for your form"
-                            @change="(value: string) => (editFormStore.formData.description = value)"
-                            :starterkit-options="{
-                                heading: {
-                                    levels: [2, 3, 4, 5, 6],
-                                },
-                            }"
-                        />
-                    </div>
-                    <hr class="border-outline-gray-1 -mx-8 mb-8" />
-                    <div v-if="groupedRows.length === 0">
-                        <div
-                            class="flex flex-col gap-4 p-8 min-h-48 items-center justify-center bg-surface-gray-1 rounded-6 text-center border-2 border-dashed border-outline-gray-2"
-                        >
-                            <p class="text-sm-medium text-ink-gray-6">Add fields to design your form</p>
-                            <p class="text-xs text-ink-gray-5">Click on fields from the sidebar to add them</p>
-                        </div>
-                    </div>
-                    <div class="flex flex-col" v-else>
-                        <template v-for="(row, rIdx) in groupedRows" :key="rowIndexOf(row, rIdx)">
-                            <RowDropZone
-                                :atRow="rowIndexOf(row, rIdx)"
-                                :isDragging="isDraggingField"
-                                @drop="onRowZoneDrop"
+            <!-- Scrollable canvas -->
+            <div class="flex-1 overflow-y-auto">
+                <div v-if="editFormStore.formData && editFormStore.activeSectionIndex === 'success'" class="h-full w-full bg-white">
+                    <SuccessCanvas />
+                </div>
+
+                <div
+                    v-else-if="editFormStore.formData"
+                    ref="fieldContentRef"
+                    class="max-w-[960px] mx-auto bg-surface-base border border-outline-gray-1 rounded-6 shadow-sm my-6 mb-24"
+                >
+                    <div class="p-8">
+                        <div class="flex flex-col gap-3 mb-8">
+                            <input
+                                type="text"
+                                class="outline-none bg-transparent border-none text-2xl-semibold text-ink-gray-9 focus:ring-0 p-0 placeholder:text-ink-gray-4"
+                                placeholder="Untitled Form"
+                                v-model="editFormStore.formData.title"
                             />
-                            <div
-                                class="flex flex-row items-stretch gap-5 mb-5 last:mb-0"
-                                data-form-builder-component="form-row"
-                                :data-row-index="rowIndexOf(row, rIdx)"
-                            >
-                                <template
-                                    v-for="(col, cIdx) in row"
-                                    :key="`${rowIndexOf(row, rIdx)}-${colIndexOf(col, cIdx)}`"
+                            <TextEditor
+                                :content="editFormStore.formData.description"
+                                editor-class="h-fit !w-full form-description text-ink-gray-7"
+                                placeholder="Write a description for your form"
+                                @change="(value: string) => (editFormStore.formData.description = value)"
+                                :starterkit-options="{
+                                    heading: {
+                                        levels: [2, 3, 4, 5, 6],
+                                    },
+                                }"
+                            />
+                        </div>
+                        <hr class="border-outline-gray-1 -mx-8 mb-8" />
+                        <draggableComponent
+                            v-if="groupedRows.length === 0"
+                            :list="emptyBuffer"
+                            :group="{ name: 'fields', put: true, pull: false }"
+                            item-key="fieldname"
+                            tag="div"
+                            :force-fallback="true"
+                            data-form-builder-component="empty-canvas-drop-zone"
+                            :class="[
+                                'flex flex-col gap-4 p-8 min-h-48 items-center justify-center rounded-6 text-center border-2 border-dashed transition-colors duration-150 ease-out motion-reduce:transition-none',
+                                isDraggingField
+                                    ? 'bg-surface-blue-1 border-outline-blue-2'
+                                    : 'bg-surface-gray-1 border-outline-gray-2',
+                            ]"
+                            @change="onEmptyCanvasDrop"
+                        >
+                            <template #header>
+                                <p class="text-sm-medium text-ink-gray-6">Add fields to design your form</p>
+                                <p class="text-xs text-ink-gray-5">
+                                    Drag fields in from the sidebar, or click the + on one
+                                </p>
+                            </template>
+                            <template #item="{}"></template>
+                        </draggableComponent>
+                        <div class="flex flex-col" v-else>
+                            <template v-for="(row, rIdx) in groupedRows" :key="rowIndexOf(row, rIdx)">
+                                <RowDropZone
+                                    :atRow="rowIndexOf(row, rIdx)"
+                                    :isDragging="isDraggingField"
+                                    @drop="onRowZoneDrop"
+                                />
+                                <div
+                                    class="flex flex-row items-stretch gap-5 mb-5 last:mb-0"
+                                    data-form-builder-component="form-row"
+                                    :data-row-index="rowIndexOf(row, rIdx)"
                                 >
+                                    <template
+                                        v-for="(col, cIdx) in row"
+                                        :key="`${rowIndexOf(row, rIdx)}-${colIndexOf(col, cIdx)}`"
+                                    >
+                                        <ColumnDropZone
+                                            :atRow="rowIndexOf(row, rIdx)"
+                                            :atCol="colIndexOf(col, cIdx)"
+                                            :isDragging="isDraggingField"
+                                            @drop="onColumnZoneDrop"
+                                        />
+                                        <draggableComponent
+                                            :list="[...col]"
+                                            :group="{ name: 'fields' }"
+                                            :item-key="fieldKey"
+                                            :animation="200"
+                                            handle=".handle"
+                                            ghost-class="opacity-50"
+                                            tag="div"
+                                            :force-fallback="true"
+                                            data-form-builder-component="cell-column"
+                                            :data-row-index="rowIndexOf(row, rIdx)"
+                                            :data-col-index="colIndexOf(col, cIdx)"
+                                            class="flex flex-col gap-5 flex-1 min-w-0"
+                                            @change="
+                                            (evt: any) =>
+                                                onCellChange(
+                                                    evt,
+                                                    rowIndexOf(row, rIdx),
+                                                    colIndexOf(col, cIdx)
+                                                )
+                                        "
+                                            @start="editFormStore.setDragging(true)"
+                                            @end="editFormStore.setDragging(false)"
+                                        >
+                                            <template #item="{ element: field }">
+                                                <FieldCard
+                                                    :field="field"
+                                                    :isDraggingAnyField="isDraggingField"
+                                                />
+                                            </template>
+                                        </draggableComponent>
+                                    </template>
                                     <ColumnDropZone
                                         :atRow="rowIndexOf(row, rIdx)"
-                                        :atCol="colIndexOf(col, cIdx)"
+                                        :atCol="row.length"
                                         :isDragging="isDraggingField"
                                         @drop="onColumnZoneDrop"
                                     />
-                                    <draggableComponent
-                                        :list="[...col]"
-                                        :group="{ name: 'fields' }"
-                                        :item-key="fieldKey"
-                                        :animation="200"
-                                        handle=".handle"
-                                        ghost-class="opacity-50"
-                                        tag="div"
-                                        :force-fallback="true"
-                                        data-form-builder-component="cell-column"
-                                        :data-row-index="rowIndexOf(row, rIdx)"
-                                        :data-col-index="colIndexOf(col, cIdx)"
-                                        class="flex flex-col gap-5 flex-1 min-w-0"
-                                        @change="
-                                        (evt: any) =>
-                                            onCellChange(
-                                                evt,
-                                                rowIndexOf(row, rIdx),
-                                                colIndexOf(col, cIdx)
-                                            )
-                                    "
-                                        @start="isDraggingField = true"
-                                        @end="isDraggingField = false"
-                                    >
-                                        <template #item="{ element: field }">
-                                            <FieldCard
-                                                :field="field"
-                                                :isDraggingAnyField="isDraggingField"
-                                            />
-                                        </template>
-                                    </draggableComponent>
-                                </template>
-                                <ColumnDropZone
-                                    :atRow="rowIndexOf(row, rIdx)"
-                                    :atCol="row.length"
+                                </div>
+                                <RowDropZone
+                                    v-show="rIdx === groupedRows.length - 1"
+                                    :atRow="rowIndexOf(row, rIdx) + 1"
                                     :isDragging="isDraggingField"
-                                    @drop="onColumnZoneDrop"
+                                    @drop="onRowZoneDrop"
                                 />
-                            </div>
-                            <RowDropZone
-                                v-show="rIdx === groupedRows.length - 1"
-                                :atRow="rowIndexOf(row, rIdx) + 1"
-                                :isDragging="isDraggingField"
-                                @drop="onRowZoneDrop"
-                            />
-                        </template>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>

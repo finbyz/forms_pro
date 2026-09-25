@@ -1,16 +1,53 @@
 <script setup lang="ts">
 import { useManageForm } from "@/stores/form/manageForm";
-import { ref } from "vue";
-import { Button, Checkbox, ListView } from "frappe-ui";
+import { useTeam } from "@/stores/team";
+import { useUser } from "@/stores/user";
+import { ref, computed, watch } from "vue";
+import { useRouter } from "vue-router";
+import { Button, Checkbox, ListView, Badge } from "frappe-ui";
+import { UsersRound } from "@lucide/vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import type { PermissionTypes } from "@/stores/form/manageForm";
 import ShareAccessModal from "./ShareAccessModal.vue";
 import RemoveAccessModal from "./RemoveAccessModal.vue";
+import InviteMemberDialog from "@/components/team/InviteMemberDialog.vue";
 
+const router = useRouter();
 const manageFormStore = useManageForm();
+const teamStore = useTeam();
+const userStore = useUser();
+
 const openModal = ref(false);
 const openRemoveAccessModal = ref(false);
+const openAddMemberDialog = ref(false);
 const selectedUserToRemove = ref<string | null>(null);
+
+const formTeamId = computed(() => {
+    return (
+        manageFormStore.formData?.linked_team_id ||
+        teamStore.targetTeamId ||
+        userStore.currentTeam?.name ||
+        ""
+    );
+});
+
+const formTeamName = computed(() => {
+    return (
+        manageFormStore.formData?.linked_team_name ||
+        userStore.currentTeam?.team_name ||
+        "Team"
+    );
+});
+
+watch(
+    formTeamId,
+    (id) => {
+        if (id) {
+            teamStore.initialize(id);
+        }
+    },
+    { immediate: true }
+);
 
 function showRemoveAccessModal(email: string) {
     selectedUserToRemove.value = email;
@@ -57,17 +94,56 @@ function setPermission(row: any, column: any, value: boolean) {
         v-model="openRemoveAccessModal"
         v-model:selected-user-to-remove="selectedUserToRemove"
     />
-    <div v-if="manageFormStore.formAccessResource.data" class="flex flex-col gap-4">
-        <div class="space-y-1">
-            <p class="text-base font-medium text-ink-gray-8">Manage access to this form</p>
-            <p class="text-sm text-ink-gray-5">
-                You can add or remove access to the form for each user of your team.
-            </p>
+    <InviteMemberDialog v-model="openAddMemberDialog" :team-id="formTeamId" />
+    <div v-if="manageFormStore.formAccessResource.data" class="flex flex-col gap-5">
+        <!-- Team Context Banner -->
+        <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-lg border border-outline-gray-2 bg-surface-gray-1">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="size-9 rounded-lg bg-surface-gray-3 flex items-center justify-center text-ink-gray-7 shrink-0">
+                    <UsersRound class="size-5" />
+                </div>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-ink-gray-5">Assigned Team:</span>
+                        <Badge theme="blue" size="sm" class="font-medium">{{ formTeamName }}</Badge>
+                    </div>
+                    <p class="text-xs text-ink-gray-5 mt-0.5">
+                        Team members can be given view, edit, or share permissions on this form.
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    icon-left="users"
+                    @click="router.push('/team')"
+                >
+                    Manage Team
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    icon-left="plus"
+                    @click="openAddMemberDialog = true"
+                >
+                    Add to Team
+                </Button>
+            </div>
         </div>
-        <div class="flex gap-2">
-            <Button variant="outline" size="sm" icon-left="plus" @click="openModal = true">
-                Share Access
-            </Button>
+
+        <div class="flex items-center justify-between">
+            <div class="space-y-0.5">
+                <p class="text-base font-medium text-ink-gray-8">Form Access & Permissions</p>
+                <p class="text-sm text-ink-gray-5">
+                    Manage which users can view, edit, or share this form.
+                </p>
+            </div>
+            <div class="flex gap-2">
+                <Button variant="solid" size="sm" icon-left="plus" @click="openModal = true">
+                    Share Access
+                </Button>
+            </div>
         </div>
         <ListView
             :columns="columns"

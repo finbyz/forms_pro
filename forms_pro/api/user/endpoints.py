@@ -15,13 +15,16 @@ def get_user(user: str) -> GetUserBasicResponse | None:
     return GetUserBasicResponse.model_validate(data).model_dump()
 
 
-@frappe.whitelist()
-def get_current_user() -> GetUserResponseSchema:
+@frappe.whitelist(allow_guest=True)
+def get_current_user() -> GetUserResponseSchema | None:
     """
     Get Current User Data
     """
 
     user_id = frappe.session.user
+    if not user_id or user_id == "Guest":
+        return None
+
     user_doc: User = frappe.get_doc("User", user_id)
     data = user_doc.as_dict()
     data["roles"] = user_doc.get("roles")
@@ -30,7 +33,7 @@ def get_current_user() -> GetUserResponseSchema:
     return GetUserResponseSchema.model_validate(data).model_dump()
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def get_user_teams() -> list[GetUserTeamsResponseSchema]:
     """
     Get the list of teams for the current user
@@ -38,9 +41,9 @@ def get_user_teams() -> list[GetUserTeamsResponseSchema]:
 
     user = frappe.session.user
 
-    if user == "Guest":
+    if not user or user == "Guest":
         return []
 
-    teams = get_user_teams_utils(user)
+    teams = get_user_teams_utils(user, create_if_empty=True)
 
     return [GetUserTeamsResponseSchema.model_validate(team).model_dump() for team in teams]

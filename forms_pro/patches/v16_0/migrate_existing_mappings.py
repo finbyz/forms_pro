@@ -16,7 +16,7 @@ def execute():
                 frappe.db.set_value("Form Field", fld.name, {
                     "source_type": "Target Field",
                     "mapping_type": "Direct",
-                    "target_fieldname": fld.fieldname
+                    "target_field": fld.fieldname
                 }, update_modified=False)
             else:
                 frappe.db.set_value("Form Field", fld.name, {

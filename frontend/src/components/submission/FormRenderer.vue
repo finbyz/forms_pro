@@ -118,17 +118,19 @@ function colKey(col: FormField[], cIdx: number) {
                     <Button
                         v-if="!store.isLastStep"
                         variant="solid"
+                        class="fp-primary-action"
                         @click="store.handleNextStep"
                         :loading="store.isLoading"
                     >
                         <span class="flex items-center gap-1.5">
                             Next
-                            <span class="lucide-arrow-right w-3 h-3" aria-hidden="true" />
+                            <lucide-arrow-right class="w-3 h-3" aria-hidden="true" />
                         </span>
                     </Button>
                     <Button
                         v-else
                         variant="solid"
+                        class="fp-primary-action"
                         @click="store.submitForm()"
                         :loading="store.isLoading"
                     >

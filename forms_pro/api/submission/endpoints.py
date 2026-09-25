@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 
 import frappe
@@ -10,6 +11,7 @@ from forms_pro.forms_pro.doctype.form.form import Form
 from forms_pro.forms_pro.doctype.form_field.form_field import _DISPLAY_ONLY_FIELDTYPES
 from forms_pro.utils.form_generator import SubmissionStatus
 from forms_pro.utils.permissions import require_permission
+from forms_pro.api.v1.public.security import check_rate_limit, verify_captcha
 
 from .schema import UserSubmissionResponse
 
@@ -52,6 +54,38 @@ def _evaluate_conditions(conditions: list[dict], form_data: dict, field_map: dic
         if operator == "Is Not Empty" and (actual is None or actual == ""):
             return False
     return True
+
+
+# Format checks mirror the client, because submit_form_response is public and a
+# direct API call never runs the browser validation.
+
+
+def _format_error(field, value) -> str | None:
+    if value in (None, "", []):
+        return None
+
+    text = str(value).strip()
+
+    if field.fieldtype == "Email":
+        # Use Frappe's own validator so a form accepts exactly what the rest of
+        # the framework does (requires an @ and a dotted domain).
+        from frappe.utils import validate_email_address
+
+        if not validate_email_address(text):
+            return _("{0} must be a valid email address").format(field.label)
+
+    if field.fieldtype == "Phone":
+        digits = re.sub(r"\D", "", text)
+        if not (6 <= len(digits) <= 15):
+            return _("{0} must be a valid phone number").format(field.label)
+
+    if field.fieldtype == "Number":
+        try:
+            float(text)
+        except (TypeError, ValueError):
+            return _("{0} must be a number").format(field.label)
+
+    return None
 
 
 def _validate_form_response(form: "Form", form_data: dict) -> None:
@@ -99,6 +133,11 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
         is_empty = value is None or value == "" or value == []
         if is_required and is_empty:
             errors.append(_("{0} is required").format(field.label))
+            continue
+
+        problem = _format_error(field, value)
+        if problem:
+            errors.append(problem)
 
     if errors:
         frappe.throw("\n".join(errors), frappe.ValidationError)
@@ -109,6 +148,7 @@ def submit_form_response(
     form_id: str,
     form_data: list[dict],
     submission_status: str = SubmissionStatus.SUBMITTED.value,
+    captcha_token: str | None = None,
 ) -> str:
     """
     Submit a form response
@@ -137,6 +177,13 @@ def submit_form_response(
                 _("This form is un-published, so responses are no longer being collected."),
                 frappe.PermissionError,
             )
+
+        # Guard before any work happens, so a rejected request never creates a
+        # submission row or touches the target DocType. A saved draft is the
+        # user's own in-progress work, so only real submissions are checked.
+        check_rate_limit(form.route or form_id)
+        if status == SubmissionStatus.SUBMITTED:
+            verify_captcha(captcha_token, action="submit")
 
         form_data_dict = {item["fieldname"]: item["value"] for item in form_data}
 
@@ -167,51 +214,44 @@ def get_user_submissions(form_id: str) -> list[UserSubmissionResponse]:
     Returns:
         A list of submissions for the user
     """
-    form: Form = frappe.get_doc("Form", form_id)
-    target_doctype = form.target_doctype
-
-    submissions = frappe.get_all(
-        doctype=target_doctype,
-        filters={"owner": frappe.session.user},
-        fields=["name", "creation", "modified", "fp_submission_status", "owner"],
-        order_by="creation",
-    )
-
-    return [UserSubmissionResponse.model_validate(submission).model_dump() for submission in submissions]
+    return _list_submissions(form_id, owner=frappe.session.user)
 
 
 @frappe.whitelist()
-def get_submission_response(submission_id: str, doctype: str) -> dict[str, Any]:
+def get_submission_response(submission_id: str, doctype: str | None = None) -> dict[str, Any]:
     """
-    Get a full submission response by ID.
-    This API checks if the user is the team member / the form is shared with the user.
+    Return one submission with its answers.
 
-    Args:
-        submission_id: The name/ID of the submission document
-        doctype: The submission's doctype (target_doctype of the form)
+    Answers live on FP Form Submission.payload — including fields that are not
+    mapped onto the target DocType (notes, ratings, repeating tables), which the
+    old target-DocType lookup could never show.
 
-    Returns:
-        The submission document as a dict
+    `doctype` is accepted for backwards compatibility and ignored.
     """
-    linked_form = frappe.db.get_value(doctype, submission_id, "fp_linked_form")
-    if not linked_form:
-        frappe.throw(_("Submission not found."), frappe.DoesNotExistError)
+    submission = frappe.get_doc("FP Form Submission", submission_id)
 
-    form_data = frappe.db.get_value("Form", linked_form, ["linked_team_id", "target_doctype"], as_dict=True)
-
-    if form_data.target_doctype != doctype:
-        frappe.throw(_("Invalid doctype for this submission."), frappe.PermissionError)
-
-    if not frappe.has_permission(
-        doctype="FP Team", ptype="write", doc=form_data.linked_team_id, user=frappe.session.user
-    ):
+    team = frappe.db.get_value("Form", submission.form, "linked_team_id")
+    if not frappe.has_permission(doctype="FP Team", ptype="write", doc=team, user=frappe.session.user):
         frappe.throw(
             _("You do not have permission to read this form's submissions."),
             frappe.PermissionError,
         )
 
-    submission = frappe.get_doc(form_data.target_doctype, submission_id)
-    return submission.as_dict()
+    try:
+        answers = frappe.parse_json(submission.payload) or {}
+    except Exception:
+        answers = {}
+
+    return {
+        **answers,
+        "name": submission.name,
+        "creation": submission.creation,
+        "modified": submission.modified,
+        "owner": submission.owner,
+        "status": submission.status,
+        "target_doctype": submission.target_doctype,
+        "target_name": submission.target_name,
+    }
 
 
 @frappe.whitelist()
@@ -248,14 +288,79 @@ def get_all_submissions(form_id: str) -> list[UserSubmissionResponse]:
     Returns:
         A list of submissions for the form
     """
-    form: Form = frappe.get_doc("Form", form_id)
-    target_doctype = form.target_doctype
+    return _list_submissions(form_id)
+
+
+def _list_submissions(form_id: str, owner: str | None = None) -> list[UserSubmissionResponse]:
+    """
+    Read a form's submissions from FP Form Submission.
+
+    These listings used to query the target DocType for `fp_submission_status`,
+    which raises OperationalError whenever that legacy custom field is absent
+    (a form pointed at Contact, or at a generated placeholder DocType) and,
+    worse, returned every record of that DocType instead of this form's.
+    """
+    filters: dict = {"form": form_id}
+    if owner:
+        filters["owner"] = owner
 
     submissions = frappe.get_all(
-        doctype=target_doctype,
-        fields=["name", "creation", "modified", "fp_submission_status", "owner"],
-        filters={"fp_submission_status": "Submitted"},
-        order_by="creation",
+        "FP Form Submission",
+        filters=filters,
+        fields=["name", "creation", "modified", "status", "owner"],
+        order_by="creation desc",
     )
 
-    return [UserSubmissionResponse.model_validate(submission).model_dump() for submission in submissions]
+    return [
+        UserSubmissionResponse.model_validate(
+            {
+                "name": s.name,
+                "creation": s.creation,
+                "modified": s.modified,
+                "fp_submission_status": s.status or SubmissionStatus.SUBMITTED.value,
+                "owner": s.owner,
+            }
+        ).model_dump()
+        for s in submissions
+    ]
+
+
+@frappe.whitelist()
+def get_submission_for_document(doctype: str, docname: str) -> dict | None:
+    """
+    Find the form submission that produced a given document.
+
+    Someone looking at a Contact in the desk has no way to tell it came from a
+    form, let alone see the answers that were not mapped onto the record. This
+    resolves the record back to its submission so the desk can link across to
+    the Forms Pro submission view, where the full set of answers lives.
+
+    Returns None when the document did not come from a form.
+    """
+    if not (doctype and docname):
+        return None
+
+    if not frappe.has_permission(doctype, "read", docname):
+        frappe.throw(_("You do not have read access to this document"), frappe.PermissionError)
+
+    if not frappe.get_meta(doctype).has_field("fp_linked_form"):
+        return None
+
+    form_id = frappe.db.get_value(doctype, docname, "fp_linked_form")
+    if not form_id or not frappe.db.exists("Form", form_id):
+        return None
+
+    submission = frappe.db.get_value(
+        "FP Form Submission",
+        {"target_doctype": doctype, "target_name": docname},
+        ["name", "submitted_at"],
+        as_dict=True,
+        order_by="creation desc",
+    )
+
+    return {
+        "form": form_id,
+        "form_title": frappe.db.get_value("Form", form_id, "title"),
+        "submission": submission.name if submission else None,
+        "submitted_at": submission.submitted_at if submission else None,
+    }

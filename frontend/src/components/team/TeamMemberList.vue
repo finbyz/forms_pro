@@ -42,7 +42,7 @@ function handleMemberRemoval(row: TeamMember) {
             <h3 class="font-medium">Team Members</h3>
             <Button
                 icon-left="plus"
-                label="Invite Member"
+                label="Add / Invite Member"
                 variant="outline"
                 @click="openInviteMemberDialog = true"
             />
@@ -57,7 +57,7 @@ function handleMemberRemoval(row: TeamMember) {
                     title: 'No Team Members Added',
                     description: 'Add team members to your team to get started',
                     button: {
-                        label: 'Invite Member',
+                        label: 'Add / Invite Member',
                         variant: 'solid',
                         onClick: () => {
                             openInviteMemberDialog = true;

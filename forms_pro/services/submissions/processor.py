@@ -12,7 +12,12 @@ from typing import Any
 import frappe
 from frappe import _
 
+from forms_pro.services.authoring.target_fields import build_links
 from forms_pro.services.mapping.adapters import get_adapter
+from forms_pro.utils.form_generator import (
+    LINKED_FORM_FIELDOPTIONS,
+    SUBMISSION_STATUS_FIELDOPTIONS,
+)
 from forms_pro.services.publishing.compiler import FormCompiler
 
 
@@ -43,12 +48,14 @@ class SubmissionProcessor:
                 self._update_processing_status(submission.name, "Completed")
                 self._mark_success(submission.name, mapped_data)
                 self._update_target_ref(submission.name, None, "Collect Only")
+                self._notify_submitted(submission.name, None, "Collect Only")
                 return {"submission_id": submission.name, "status": "Success"}
 
             self._update_processing_status(submission.name, "Creating")
             adapter = get_adapter(self.form_doc.target_doctype)
             target_doc = adapter.prepare_document(mapped_data)
             adapter.after_mapping(target_doc, mapped_data)
+            self._stamp_tracking_fields(target_doc, submission.name)
             target_doc = adapter.persist(target_doc, self.form_doc.record_strategy or "Create New")
 
             self._update_target_ref(submission.name, target_doc.name, self.form_doc.record_strategy or "Create")
@@ -56,6 +63,7 @@ class SubmissionProcessor:
             self._mark_success(submission.name, mapped_data)
 
             self._share_documents(submission.name, target_doc)
+            self._notify_submitted(submission.name, target_doc, self.form_doc.record_strategy or "Create")
 
             return {
                 "submission_id": submission.name,
@@ -66,6 +74,39 @@ class SubmissionProcessor:
         except Exception as e:
             self._mark_failed(submission.name, str(e))
             raise
+
+    def _notify_submitted(self, submission_name: str, target_doc: Any, operation: str) -> None:
+        """Announce a completed submission to whoever subscribed to it.
+
+        Consumers register under the ``fp_form_submitted`` hook. Forms Pro does
+        not import them, so an app can react to submissions without this one
+        knowing it exists.
+
+        This runs last, once the target record is persisted and its reference is
+        written back onto the submission. A consumer that reads the submission
+        therefore always sees a settled row, never a half-written one.
+
+        A subscriber must never be able to fail a submission: the visitor's
+        record is already saved, and a broken listener is our problem, not
+        theirs. Every consumer is isolated and its failure is logged.
+        """
+        payload = {
+            "form": self.form_id,
+            "submission": submission_name,
+            "route": self.form_doc.route,
+            "operation": operation,
+            "target_doctype": self.form_doc.target_doctype if target_doc else None,
+            "target_name": target_doc.name if target_doc else None,
+            "metadata": self.metadata,
+        }
+        for handler in frappe.get_hooks("fp_form_submitted") or []:
+            try:
+                frappe.call(handler, **payload)
+            except Exception:
+                frappe.log_error(
+                    title=f"fp_form_submitted subscriber failed: {handler}",
+                    message=frappe.get_traceback(),
+                )
 
     def _create_submission_record(self) -> Any:
         submission = frappe.new_doc("FP Form Submission")
@@ -88,6 +129,36 @@ class SubmissionProcessor:
         submission.insert(ignore_permissions=True, ignore_mandatory=True)
         return submission
 
+    def _stamp_tracking_fields(self, target_doc: Any, submission_id: str | None = None) -> None:
+        """
+        Record which form produced this document, on the document itself.
+
+        `fp_linked_form` and `fp_submission_status` are created on the target
+        DocType when a form is generated, but nothing ever filled them in: every
+        record came out with a null form link and a status stuck at the field's
+        "Draft" default. That broke two things -- CSV export filters on
+        `fp_linked_form`, so it returned no rows, and someone looking at a
+        Contact in the desk had no way to tell it came from a form at all.
+
+        Only set on DocTypes that actually carry the fields, so a form pointed
+        at a DocType Forms Pro never generated is unaffected.
+        """
+        meta = frappe.get_meta(self.form_doc.target_doctype)
+
+        if meta.has_field(LINKED_FORM_FIELDOPTIONS["fieldname"]):
+            target_doc.set(LINKED_FORM_FIELDOPTIONS["fieldname"], self.form_doc.name)
+
+        if meta.has_field(SUBMISSION_STATUS_FIELDOPTIONS["fieldname"]):
+            target_doc.set(SUBMISSION_STATUS_FIELDOPTIONS["fieldname"], self.status)
+
+        # Links into the Forms Pro app, which shows every answer -- including
+        # the ones that are not columns on this DocType.
+        links = build_links(self.form_doc.name, submission_id)
+        if meta.has_field("fp_form_link"):
+            target_doc.set("fp_form_link", links["form_link"])
+        if meta.has_field("fp_submission_link"):
+            target_doc.set("fp_submission_link", links["submission_link"])
+
     def _resolve_version(self) -> str | None:
         latest = frappe.get_all("FP Form Version", filters={"form": self.form_id}, order_by="creation desc", limit=1)
         return latest[0].name if latest else None
@@ -98,15 +169,48 @@ class SubmissionProcessor:
         if not frappe.db.exists("DocType", self.form_doc.target_doctype):
             frappe.throw(_("Target DocType {0} does not exist.").format(self.form_doc.target_doctype))
 
+        # Mandatory fields are checked by the API endpoints, but the processor
+        # is the one place every submission path goes through, so enforce it
+        # here too: a caller that reaches the processor directly must not be
+        # able to write a record that the form says is incomplete. Drafts are
+        # deliberately exempt -- they are in-progress work.
+        if self.status == "Submitted":
+            # Imported late: the validator lives in the API layer, and importing
+            # it at module scope would make services depend on api at import time.
+            from forms_pro.api.submission.endpoints import _validate_form_response
+
+            _validate_form_response(self.form_doc, self.form_data)
+
     def _map_to_target(self) -> dict[str, Any]:
+        """
+        Build the target document's values from the submission.
+
+        A hidden field is set by whoever built the form, not by the visitor:
+        "set language to German and hide it, so every contact who fills this in
+        gets German". So its value comes from the field's default and the
+        submitted payload is ignored for it. Previously the browser supplied
+        that value, which meant an edited request could store anything, and a
+        payload that simply omitted the field stored nothing at all.
+
+        A hidden field with no default is skipped rather than written as None,
+        so it cannot blank an existing value under the "Update Existing"
+        strategy.
+        """
         mapped: dict[str, Any] = {}
         for field in self.form_doc.fields:
-            if field.target_field and field.mapping_type:
-                value = self.form_data.get(field.fieldname) or self.form_data.get(field.field_key)
-                if field.mapping_type == "Direct":
-                    mapped[field.target_field] = value
-                elif field.mapping_type == "Constant":
-                    mapped[field.target_field] = field.default if hasattr(field, "default") else None
+            if not (field.target_field and field.mapping_type):
+                continue
+
+            if field.mapping_type == "Constant":
+                mapped[field.target_field] = field.default
+            elif field.mapping_type == "Direct":
+                if field.hidden:
+                    if field.default not in (None, ""):
+                        mapped[field.target_field] = field.default
+                else:
+                    mapped[field.target_field] = self.form_data.get(
+                        field.fieldname
+                    ) or self.form_data.get(field.field_key)
         return mapped
 
     def _mark_success(self, submission_name: str, mapped_data: dict[str, Any]) -> None:

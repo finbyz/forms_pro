@@ -1,5 +1,5 @@
 <template>
-    <div class="flex h-screen w-full">
+    <div class="flex h-screen w-full overflow-hidden">
         <Sidebar :sections="sidebarSections">
             <template #header>
                 <TeamSwitcher />
@@ -9,8 +9,8 @@
                     <template #target="{ togglePopover, isOpen }">
                         <div
                             @click="togglePopover"
-                            class="p-2 z-10 rounded-md flex gap-2 items-center hover:bg-surface-white cursor-pointer duration-200 ease-[cubic-bezier(0.4, 0, 0.2, 1)]"
-                            :class="{ 'bg-surface-white': isOpen, '!p-1': isCollapsed }"
+                            class="p-2 z-10 rounded-4 flex gap-2 items-center hover:bg-surface-gray-2 cursor-pointer transition-base"
+                            :class="{ 'bg-surface-gray-2': isOpen, '!p-1': isCollapsed }"
                         >
                             <Avatar
                                 :disabled="true"
@@ -19,20 +19,20 @@
                                 size="lg"
                                 shape="square"
                             />
-                            <div v-if="!isCollapsed" class="flex items-center gap-2">
-                                <div class="flex flex-col gap-1">
-                                    <span class="text-base font-medium text-ink-gray-7">
+                            <div v-if="!isCollapsed" class="flex items-center gap-2 min-w-0 flex-1">
+                                <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                                    <span class="text-sm-medium text-ink-gray-8 truncate">
                                         {{ session.full_name }}
                                     </span>
-                                    <span class="text-xs text-ink-gray-5">{{ session.user }}</span>
+                                    <span class="text-xs text-ink-gray-5 truncate">{{ session.user }}</span>
                                 </div>
-                                <span class="lucide-ellipsis-vertical text-ink-gray-6" aria-hidden="true" />
+                                <lucide-ellipsis-vertical class="size-4 text-ink-gray-5 shrink-0" aria-hidden="true" />
                             </div>
                         </div>
                     </template>
                     <template #body>
                         <div
-                            class="flex flex-col gap-2 bg-surface-white shadow-lg z-0 rounded-lg mb-2 p-2"
+                            class="flex flex-col gap-1 bg-surface-elevation-2 shadow-2xl rounded-6 mb-2 p-1"
                             :class="{ 'w-56': !isCollapsed }"
                         >
                             <Button
@@ -41,14 +41,15 @@
                                 @click="session.logout.submit"
                                 label="Log out"
                                 icon-left="log-out"
+                                size="sm"
                             />
                         </div>
                     </template>
                 </Popover>
             </template>
         </Sidebar>
-        <div class="p-4 flex-1 max-w-screen-lg mx-auto">
-            <slot> </slot>
+        <div class="p-6 flex-1 min-h-0 overflow-y-auto">
+            <slot />
         </div>
     </div>
 </template>

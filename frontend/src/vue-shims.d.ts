@@ -12,3 +12,9 @@ declare global {
     csrf_token?: string;
   }
 }
+
+declare module "frappe-ui-text-editor" {
+  import type { Component } from "vue";
+  const TextEditor: Component;
+  export default TextEditor;
+}

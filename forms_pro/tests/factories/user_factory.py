@@ -2,7 +2,7 @@ from typing import Any
 
 from faker import Faker
 from frappe.core.doctype.user.user import User
-from frappe_factory_bot.frappe_factory_bot.base_factory import BaseFactory
+from forms_pro.tests.factories.base_factory import BaseFactory
 
 from forms_pro.roles import FORMS_PRO_ROLE
 

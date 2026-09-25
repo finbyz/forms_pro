@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
-import { Button, FormControl, Badge } from "frappe-ui";
+import { Button, FormControl, Badge, createResource } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
+import { validateFormRoute } from "@/utils/form_generator";
+import { toast } from "vue-sonner";
 
 const editFormStore = useEditForm();
 
@@ -12,6 +14,7 @@ const local = ref({
   route: "",
   access_mode: "Public" as "Public" | "Requires Login" | "Internal Only",
   record_strategy: "Create New" as "Create New" | "Update Existing" | "Collect Submission Only",
+  create_target_fields: false,
   success_mode: "Designed Page" as "Designed Page" | "Redirect to External URL",
   login_required: false,
   allow_incomplete: false,
@@ -21,7 +24,6 @@ const local = ref({
 const accessModeOptions = [
   { label: "Public", value: "Public" },
   { label: "Requires Login", value: "Requires Login" },
-  { label: "Internal Only", value: "Internal Only" },
 ] as const;
 
 const recordStrategyOptions = [
@@ -37,31 +39,123 @@ const successModeOptions = [
 
 const routeError = ref("");
 
-watch(() => editFormStore.formData, (data) => {
-  if (data) {
-    local.value = {
-      route: data.route || "",
-      access_mode: data.access_mode || "Public",
-      record_strategy: data.record_strategy || "Create New",
-      success_mode: data.success_mode || "Designed Page",
-      login_required: data.login_required || false,
-      allow_incomplete: data.allow_incomplete || false,
-      success_redirect_url: data.success_redirect_url || "",
-    };
-    validateRoute();
-  }
-}, { immediate: true });
+// A form with no target_doctype has nothing to offer in the builder's DocType
+// sidebar, and there was previously no way to set one after creation.
+const doctypeList = createResource({
+  url: "forms_pro.api.form.get_doctype_list",
+  method: "GET",
+  auto: true,
+});
 
-function validateRoute() {
-  if (!local.value.route) {
-    routeError.value = "";
-    return;
+const doctypeOptions = computed(() =>
+  (doctypeList.data ?? []).map((name: string) => ({ label: name, value: name }))
+);
+
+async function setTargetDoctype(value: string) {
+  const { changed, seeded, hadMappings } = await editFormStore.setTargetDoctype(value);
+  if (!changed) return;
+  if (hadMappings) {
+    toast.warning(
+      "Target DocType changed — existing field mappings point at the old DocType and need review."
+    );
+  } else if (seeded) {
+    toast.success(`Added ${seeded} required field${seeded === 1 ? "" : "s"} from ${value}`);
   }
-  if (!/^[a-z0-9-]+$/.test(local.value.route)) {
-    routeError.value = "Route must contain only lowercase letters, numbers, and hyphens";
-  } else {
-    routeError.value = "";
+}
+
+// The panel is a local copy of the document, so it has to be refilled whenever
+// the form loads or is replaced by a save response. Without this the controls
+// keep their initial defaults and every visit looks like the change was lost.
+watch(
+    () => editFormStore.formData,
+    (data) => {
+        if (!data) return;
+        local.value = {
+            route: data.route ?? "",
+            // Keep the two in step: a legacy form may carry login_required
+            // without a matching access_mode.
+            access_mode:
+                data.access_mode === "Requires Login" || data.login_required
+                    ? "Requires Login"
+                    : "Public",
+            record_strategy: data.record_strategy ?? "Create New",
+            create_target_fields: Boolean(data.create_target_fields),
+            success_mode: data.success_mode ?? "Designed Page",
+            login_required: !!data.login_required,
+            allow_incomplete: !!data.allow_incomplete,
+            success_redirect_url: data.success_redirect_url ?? "",
+        };
+        routeError.value = "";
+    },
+    { immediate: true, deep: true }
+);
+
+const ROUTE_PATTERN = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
+
+/**
+ * Validate the public route: format first (cheap), then uniqueness against
+ * other forms. Returns true when the route is usable.
+ */
+async function validateRoute(): Promise<boolean> {
+  const route = (local.value.route || "").trim();
+
+  if (!route) {
+    routeError.value = "Route cannot be empty.";
+    return false;
   }
+  if (!ROUTE_PATTERN.test(route)) {
+    routeError.value =
+      "Use lowercase letters, numbers, hyphens or underscores (e.g. solar-enquiry).";
+    return false;
+  }
+
+  try {
+    const taken = await validateFormRoute(editFormStore.currentFormId ?? "", route);
+    if (taken) {
+      routeError.value = "That route is already used by another form.";
+      return false;
+    }
+  } catch {
+    routeError.value = "Could not check the route. Please try again.";
+    return false;
+  }
+
+  routeError.value = "";
+  return true;
+}
+
+/** "Requires Login" is the single source of truth for login_required. */
+function updateAccessMode(val: any) {
+  const mode = typeof val === "string" ? val : val?.value || "Public";
+  local.value.access_mode = mode;
+  saveSetting("access_mode", mode);
+  const requiresLogin = mode === "Requires Login";
+  local.value.login_required = requiresLogin;
+  saveSetting("login_required", requiresLogin ? 1 : 0);
+}
+
+function updateAllowIncomplete(val: any) {
+  const checked = Boolean(val);
+  local.value.allow_incomplete = checked;
+  saveSetting("allow_incomplete", checked ? 1 : 0);
+}
+
+function updateRecordStrategy(val: any) {
+  const strategy = typeof val === "string" ? val : val?.value || "Create New";
+  local.value.record_strategy = strategy;
+  saveSetting("record_strategy", strategy);
+}
+
+function updateSuccessMode(val: any) {
+  const mode = typeof val === "string" ? val : val?.value || "Designed Page";
+  local.value.success_mode = mode;
+  saveSetting("success_mode", mode);
+}
+
+function updateSuccessRedirectUrl(val: any) {
+  const url = typeof val === "string" ? val : val?.target?.value || "";
+  local.value.success_redirect_url = url;
+  saveSetting("success_redirect_url", url);
 }
 
 function saveSetting(key: string, value: any) {
@@ -72,10 +166,16 @@ function saveSetting(key: string, value: any) {
   }
 }
 
-function updateRoute() {
-  validateRoute();
-  if (!routeError.value) {
-    saveSetting("route", local.value.route);
+const savingRoute = ref(false);
+
+async function updateRoute() {
+  savingRoute.value = true;
+  try {
+    if (!(await validateRoute())) return;
+    saveSetting("route", local.value.route.trim());
+    toast.success("Route updated");
+  } finally {
+    savingRoute.value = false;
   }
 }
 
@@ -107,12 +207,12 @@ ${scriptTag}`;
     </div>
 
     <!-- Content with scroll -->
-    <div class="flex-1" style="overflow-y: auto">
+    <div class="flex-1 overflow-y-auto">
       <div class="mx-auto max-w-3xl space-y-6 pb-10 px-5 py-5">
         <!-- General -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <span class="lucide-settings w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <lucide-settings class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">General</h3>
           </div>
           <div class="space-y-4">
@@ -131,7 +231,13 @@ ${scriptTag}`;
                   />
                   <p v-if="routeError" class="text-xs text-ink-red-7">{{ routeError }}</p>
                 </div>
-                <Button variant="subtle" theme="gray" size="sm" @click="updateRoute">Save</Button>
+                <Button
+                  variant="subtle"
+                  theme="gray"
+                  size="sm"
+                  :loading="savingRoute"
+                  @click="updateRoute"
+                >Save</Button>
               </div>
             </div>
             <div class="flex items-center justify-between pt-1">
@@ -144,7 +250,7 @@ ${scriptTag}`;
         <!-- Access -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <span class="lucide-lock w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <lucide-lock class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Access</h3>
           </div>
           <div class="space-y-4">
@@ -156,7 +262,7 @@ ${scriptTag}`;
                 size="sm"
                 :options="accessModeOptions"
                 v-model="local.access_mode"
-                @change="saveSetting('access_mode', local.access_mode)"
+                @update:modelValue="updateAccessMode"
               />
             </div>
             <div class="flex items-center justify-between pt-1">
@@ -165,10 +271,10 @@ ${scriptTag}`;
                 <p class="text-xs text-ink-gray-5 mt-0.5">Let users save incomplete forms</p>
               </div>
               <FormControl
-                type="switch"
+                type="checkbox"
                 size="sm"
                 v-model="local.allow_incomplete"
-                @change="saveSetting('allow_incomplete', local.allow_incomplete ? 1 : 0)"
+                @update:modelValue="updateAllowIncomplete"
               />
             </div>
           </div>
@@ -177,13 +283,31 @@ ${scriptTag}`;
         <!-- Submission -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <span class="lucide-send w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <lucide-send class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Submission</h3>
           </div>
           <div class="space-y-4">
-            <div class="flex items-center justify-between pt-1">
-              <label class="text-sm text-ink-gray-6">Target DocType</label>
-              <Badge variant="subtle" :label="form.target_doctype || 'None'" theme="blue" />
+            <div class="flex flex-col gap-2 pt-1">
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-ink-gray-6">Target DocType</label>
+                <Badge
+                  variant="subtle"
+                  :label="form.target_doctype || 'Not set'"
+                  :theme="form.target_doctype ? 'blue' : 'orange'"
+                />
+              </div>
+              <FormControl
+                type="autocomplete"
+                variant="subtle"
+                size="sm"
+                placeholder="Search DocType…"
+                :options="doctypeOptions"
+                :modelValue="form.target_doctype"
+                @update:modelValue="(v: { value: string } | string) => setTargetDoctype(typeof v === 'string' ? v : v?.value)"
+              />
+              <p v-if="!form.target_doctype" class="text-xs text-ink-gray-5">
+                Set this to list that DocType's fields in the builder sidebar.
+              </p>
             </div>
             <div class="flex flex-col gap-2">
               <label class="text-sm text-ink-gray-6">Strategy</label>
@@ -193,7 +317,23 @@ ${scriptTag}`;
                 size="sm"
                 :options="recordStrategyOptions"
                 v-model="local.record_strategy"
-                @change="saveSetting('record_strategy', local.record_strategy)"
+                @update:modelValue="updateRecordStrategy"
+              />
+            </div>
+            <div class="flex items-start justify-between gap-4 pt-1">
+              <div>
+                <label class="text-sm text-ink-gray-8">Create Missing Fields on {{ form.target_doctype || "Target DocType" }}</label>
+                <p class="text-xs text-ink-gray-5 mt-0.5 max-w-md">
+                  Answers whose field does not exist on the target are kept only in the
+                  submission. Turn this on to add them as custom fields, grouped in their
+                  own tab.
+                </p>
+              </div>
+              <FormControl
+                type="checkbox"
+                size="sm"
+                v-model="local.create_target_fields"
+                @change="saveSetting('create_target_fields', local.create_target_fields ? 1 : 0)"
               />
             </div>
             <div class="flex flex-col gap-2">
@@ -204,7 +344,7 @@ ${scriptTag}`;
                 size="sm"
                 :options="successModeOptions"
                 v-model="local.success_mode"
-                @change="saveSetting('success_mode', local.success_mode)"
+                @update:modelValue="updateSuccessMode"
               />
             </div>
           </div>
@@ -213,7 +353,7 @@ ${scriptTag}`;
         <!-- Success Redirect (conditional) -->
         <section v-if="local.success_mode === 'Redirect to External URL'" class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <span class="lucide-external-link w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <lucide-external-link class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Redirect URL</h3>
           </div>
           <div class="space-y-2">
@@ -223,7 +363,7 @@ ${scriptTag}`;
               size="sm"
               v-model="local.success_redirect_url"
               placeholder="https://example.com/thank-you"
-              @change="saveSetting('success_redirect_url', local.success_redirect_url)"
+              @update:modelValue="updateSuccessRedirectUrl"
             />
             <p class="text-xs text-ink-gray-5">Redirect users here after successful submission. Use <code class="px-1 py-0.5 bg-surface-gray-1 rounded-1 text-ink-gray-7">&#123;&#123;submission_id&#125;&#125;</code> for dynamic IDs.</p>
           </div>
@@ -232,7 +372,7 @@ ${scriptTag}`;
         <!-- Embed -->
         <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
           <div class="flex items-center gap-2 mb-5">
-            <span class="lucide-globe w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <lucide-globe class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
             <h3 class="text-base-semibold text-ink-gray-8">Embed</h3>
           </div>
           <div class="space-y-3">

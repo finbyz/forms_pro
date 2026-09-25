@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { Button, Badge, FormControl, createResource } from "frappe-ui";
+import { Button, Badge, FormControl, Dropdown, FeatherIcon, Tooltip, createResource } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
 
 const editFormStore = useEditForm();
@@ -10,6 +10,8 @@ const limit = ref(50);
 const offset = ref(0);
 const loading = ref(false);
 const expandedRow = ref<string | null>(null);
+const searchQuery = ref("");
+const statusFilter = ref<string>("All");
 
 const formName = computed(() => editFormStore.originalFormData?.name ?? "");
 
@@ -36,6 +38,25 @@ async function fetchSubmissions() {
     }
 }
 
+const filteredSubmissions = computed(() => {
+    let list = submissions.value;
+    if (statusFilter.value !== "All") {
+        list = list.filter(s => s.status === statusFilter.value);
+    }
+    if (searchQuery.value.trim()) {
+        const q = searchQuery.value.toLowerCase().trim();
+        list = list.filter(s =>
+            (s.name && s.name.toLowerCase().includes(q)) ||
+            (s.target_name && s.target_name.toLowerCase().includes(q)) ||
+            (s.target_doctype && s.target_doctype.toLowerCase().includes(q)) ||
+            (s.source_url && s.source_url.toLowerCase().includes(q)) ||
+            (s.utm_source && s.utm_source.toLowerCase().includes(q)) ||
+            (s.response_json && s.response_json.toLowerCase().includes(q))
+        );
+    }
+    return list;
+});
+
 function toggleExpand(name: string) {
     expandedRow.value = expandedRow.value === name ? null : name;
 }
@@ -48,10 +69,47 @@ function formatDate(dt: string) {
     return dt ? new Date(dt).toLocaleString() : "-";
 }
 
+function formatPayload(raw: string) {
+    try {
+        const parsed = JSON.parse(raw);
+        return JSON.stringify(parsed, null, 2);
+    } catch {
+        return raw || "{}";
+    }
+}
+
+function exportSubmissionsCSV() {
+    if (!filteredSubmissions.value.length) return;
+    const headers = ["Submission ID", "Submitted At", "Status", "Target DocType", "Target Record", "Source URL", "UTM Source"];
+    const rows = filteredSubmissions.value.map(s => [
+        s.name,
+        s.submitted_at,
+        s.status,
+        s.target_doctype || "",
+        s.target_name || "",
+        s.source_url || "",
+        s.utm_source || "",
+    ]);
+    const csv = [headers.join(","), ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `submissions-${formName.value}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 function loadMore() {
     offset.value += limit.value;
     fetchSubmissions();
 }
+
+const statusDropdownOptions = [
+    { label: "All Status", onClick: () => { statusFilter.value = "All"; } },
+    { label: "Success", onClick: () => { statusFilter.value = "Success"; } },
+    { label: "Failed", onClick: () => { statusFilter.value = "Failed"; } },
+];
 
 onMounted(() => {
     fetchSubmissions();
@@ -59,112 +117,147 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex flex-col h-full overflow-hidden bg-gray-50">
+    <div class="flex flex-col h-full overflow-hidden bg-surface-gray-2/50">
         <!-- Header bar -->
-        <div class="flex flex-col px-6 py-6 bg-surface-base border-b border-outline-gray-1 gap-4">
-            <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-4 bg-surface-base border-b border-outline-gray-1 gap-4 shrink-0 shadow-2xs">
+            <div class="flex items-center gap-3">
+                <div class="size-8 rounded-lg bg-surface-blue-2 text-ink-blue-7 flex items-center justify-center shrink-0">
+                    <FeatherIcon name="file-text" class="size-4" />
+                </div>
                 <div>
-                    <h2 class="text-xl font-bold text-ink-gray-9">Submissions</h2>
-                    <p class="text-sm text-ink-gray-5 mt-1">{{ total }} total submission{{ total !== 1 ? "s" : "" }}</p>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-base-semibold text-ink-gray-9 leading-tight">Form Submissions</h2>
+                        <Badge variant="subtle" theme="blue" size="sm">
+                            {{ total }} total
+                        </Badge>
+                    </div>
+                    <p class="text-xs text-ink-gray-5 mt-0.5">Raw submission entries, mapped records, and responses</p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <FormControl
-                        type="search"
-                        placeholder="Search submissions..."
-                        variant="outline"
-                        size="sm"
-                        class="w-56"
-                    />
-                    <div class="border rounded-md border-outline-gray-2 px-3 py-1.5 text-sm text-ink-gray-7 bg-surface-base cursor-not-allowed opacity-70 flex items-center gap-2">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        Select date range
-                    </div>
-                    <div class="border rounded-md border-outline-gray-2 px-3 py-1.5 text-sm text-ink-gray-7 bg-surface-base cursor-not-allowed opacity-70 flex items-center gap-2 w-32 justify-between">
-                        <span class="flex items-center gap-2">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-                            All Status
-                        </span>
-                        <span class="lucide-chevron-down w-4 h-4 text-ink-gray-4" aria-hidden="true" />
-                    </div>
-                    <Button variant="outline" :loading="loading" @click="fetchSubmissions">
-                        <span class="lucide-refresh-cw w-4 h-4 text-ink-gray-7" aria-hidden="true" />
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                <FormControl
+                    type="search"
+                    placeholder="Search submissions..."
+                    v-model="searchQuery"
+                    variant="outline"
+                    size="sm"
+                    class="w-48 sm:w-60"
+                />
+
+                <!-- Status Filter Dropdown -->
+                <Dropdown
+                    :button="{
+                        label: statusFilter === 'All' ? 'All Status' : statusFilter,
+                        variant: 'outline',
+                        size: 'sm',
+                        iconRight: 'chevron-down',
+                    }"
+                    :options="statusDropdownOptions"
+                />
+
+                <Tooltip text="Refresh submissions" placement="bottom">
+                    <Button variant="ghost" size="sm" icon="refresh-cw" :loading="loading" @click="fetchSubmissions" />
+                </Tooltip>
+
+                <Tooltip text="Export current submissions list as CSV" placement="bottom">
+                    <Button variant="outline" size="sm" icon-left="download" @click="exportSubmissionsCSV" class="whitespace-nowrap">
+                        Export CSV
                     </Button>
-                    <Button variant="outline" icon-left="download" class="text-ink-gray-7">Export CSV</Button>
-                </div>
+                </Tooltip>
             </div>
         </div>
 
-        <!-- Table -->
-        <div class="flex-1 overflow-auto">
-            <table class="w-full text-sm">
-                <thead class="sticky top-0 bg-gray-100 text-gray-600 uppercase text-xs">
-                    <tr>
-                        <th class="px-4 py-3 text-left font-medium">Submitted At</th>
-                        <th class="px-4 py-3 text-left font-medium">Status</th>
-                        <th class="px-4 py-3 text-left font-medium">Target</th>
-                        <th class="px-4 py-3 text-left font-medium">Source</th>
-                        <th class="px-4 py-3 text-left font-medium">UTM</th>
-                        <th class="px-4 py-3 text-right font-medium">Detail</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template v-if="!loading && submissions.length === 0">
+        <!-- Table Container -->
+        <div class="flex-1 overflow-auto p-6">
+            <div class="bg-surface-base border border-outline-gray-1 rounded-8 shadow-2xs overflow-hidden">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-surface-gray-2 text-ink-gray-5 uppercase text-[11px] font-semibold border-b border-outline-gray-1 select-none">
                         <tr>
-                            <td colspan="6" class="p-0">
-                                <div class="flex flex-col items-center justify-center py-24 bg-white border rounded-lg m-4 mt-8 shadow-sm">
-                                    <div class="w-16 h-16 rounded-full bg-surface-gray-2 flex items-center justify-center mb-6">
-                                        <span class="lucide-file-text w-8 h-8 text-ink-gray-4" aria-hidden="true" />
+                            <th class="px-4 py-3 font-semibold">Submitted At</th>
+                            <th class="px-4 py-3 font-semibold">Status</th>
+                            <th class="px-4 py-3 font-semibold">Target Document</th>
+                            <th class="px-4 py-3 font-semibold">Source URL</th>
+                            <th class="px-4 py-3 font-semibold">UTM Source</th>
+                            <th class="px-4 py-3 text-right font-semibold">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-outline-gray-1/60">
+                        <!-- Empty state -->
+                        <template v-if="!loading && filteredSubmissions.length === 0">
+                            <tr>
+                                <td colspan="6" class="p-0">
+                                    <div class="flex flex-col items-center justify-center py-16 text-center">
+                                        <div class="size-12 rounded-full bg-surface-gray-2 flex items-center justify-center mb-3">
+                                            <FeatherIcon name="inbox" class="size-6 text-ink-gray-4" />
+                                        </div>
+                                        <h3 class="text-sm-semibold text-ink-gray-9 mb-1">
+                                            {{ searchQuery || statusFilter !== 'All' ? 'No matching submissions' : 'No submissions yet' }}
+                                        </h3>
+                                        <p class="text-xs text-ink-gray-5 max-w-sm mb-4">
+                                            {{ searchQuery || statusFilter !== 'All' ? 'Try clearing your search or status filters.' : 'Share your form with respondents or test a submission from Preview.' }}
+                                        </p>
                                     </div>
-                                    <h3 class="text-lg font-semibold text-ink-gray-9 mb-1">No submissions yet</h3>
-                                    <p class="text-sm text-ink-gray-5 mb-6">Share your form to start collecting responses.</p>
-                                    <div class="flex items-center gap-3">
-                                        <Button variant="outline" size="md">
-                                            <template #prefix><span class="lucide-link-2 w-4 h-4 mr-1.5" aria-hidden="true" /></template>
-                                            Copy Form Link
-                                        </Button>
-                                        <Button variant="solid" theme="blue" size="md">
-                                            <template #prefix><span class="lucide-external-link w-4 h-4 mr-1.5" aria-hidden="true" /></template>
-                                            Open Form
-                                        </Button>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                    <template v-for="s in submissions" :key="s.name">
-                        <tr
-                            class="border-b hover:bg-white cursor-pointer transition-colors"
-                            @click="toggleExpand(s.name)"
-                        >
-                            <td class="px-4 py-3 text-gray-700">{{ formatDate(s.submitted_at) }}</td>
-                            <td class="px-4 py-3">
-                                <Badge :label="s.status" :theme="statusTheme(s.status)" variant="subtle" size="sm" />
-                            </td>
-                            <td class="px-4 py-3 text-gray-600">
-                                <span v-if="s.target_name" class="font-mono text-xs bg-gray-100 px-1 rounded">{{ s.target_doctype }}/{{ s.target_name }}</span>
-                                <span v-else class="text-gray-400">-</span>
-                            </td>
-                            <td class="px-4 py-3 text-gray-500 text-xs truncate max-w-[180px]">{{ s.source_url || "-" }}</td>
-                            <td class="px-4 py-3 text-gray-500 text-xs">{{ s.utm_source || "-" }}</td>
-                            <td class="px-4 py-3 text-right">
-                                <span class="lucide-chevron-down w-4 h-4 text-gray-400" v-if="expandedRow !== s.name" aria-hidden="true" />
-                                <span class="lucide-chevron-up w-4 h-4 text-gray-400" v-else aria-hidden="true" />
-                            </td>
-                        </tr>
-                        <tr v-if="expandedRow === s.name" class="bg-white border-b">
-                            <td colspan="6" class="px-6 py-4">
-                                <div class="text-xs font-semibold text-gray-500 mb-2">Response Payload</div>
-                                <pre class="bg-gray-50 border rounded p-3 text-xs text-gray-700 overflow-x-auto">{{ s.response_json || "{}" }}</pre>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
+                                </td>
+                            </tr>
+                        </template>
 
-        <!-- Load more -->
-        <div v-if="submissions.length < total" class="flex justify-center py-4 border-t bg-white">
-            <Button variant="subtle" :loading="loading" @click="loadMore">Load More</Button>
+                        <!-- Data rows -->
+                        <template v-for="s in filteredSubmissions" :key="s.name">
+                            <tr
+                                class="hover:bg-surface-gray-1/80 cursor-pointer transition-colors"
+                                @click="toggleExpand(s.name)"
+                            >
+                                <td class="px-4 py-3 text-ink-gray-8 font-medium whitespace-nowrap">
+                                    {{ formatDate(s.submitted_at) }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <Badge :label="s.status" :theme="statusTheme(s.status)" variant="subtle" size="sm" />
+                                </td>
+                                <td class="px-4 py-3 text-ink-gray-7 whitespace-nowrap">
+                                    <span v-if="s.target_name" class="font-mono text-2xs bg-surface-gray-2 text-ink-gray-8 px-1.5 py-0.5 rounded border border-outline-gray-1">
+                                        {{ s.target_doctype }}: {{ s.target_name }}
+                                    </span>
+                                    <span v-else class="text-ink-gray-4 italic">No doc linked</span>
+                                </td>
+                                <td class="px-4 py-3 text-ink-gray-5 truncate max-w-[200px]" :title="s.source_url">
+                                    {{ s.source_url || "—" }}
+                                </td>
+                                <td class="px-4 py-3 text-ink-gray-5 truncate max-w-[120px]">
+                                    {{ s.utm_source || "—" }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        :icon="expandedRow === s.name ? 'chevron-up' : 'chevron-down'"
+                                        aria-label="Toggle details"
+                                    />
+                                </td>
+                            </tr>
+
+                            <!-- Expanded JSON row -->
+                            <tr v-if="expandedRow === s.name" class="bg-surface-gray-1/60">
+                                <td colspan="6" class="px-6 py-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs-semibold text-ink-gray-7">Response Payload & Form Values</span>
+                                        <span class="text-2xs text-ink-gray-5 font-mono">ID: {{ s.name }}</span>
+                                    </div>
+                                    <pre class="bg-surface-base border border-outline-gray-1 rounded-6 p-3 text-2xs font-mono text-ink-gray-8 overflow-x-auto max-h-72 leading-relaxed">{{ formatPayload(s.response_json) }}</pre>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Load more -->
+            <div v-if="submissions.length < total" class="flex justify-center py-4 mt-2">
+                <Button variant="subtle" size="sm" :loading="loading" @click="loadMore">
+                    Load More ({{ submissions.length }} of {{ total }})
+                </Button>
+            </div>
         </div>
     </div>
 </template>

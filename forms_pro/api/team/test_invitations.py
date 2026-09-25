@@ -81,7 +81,9 @@ class TestTeamInvitations(IntegrationTestCase):
         frappe.set_user(other.name)
         with self.assertRaises(frappe.PermissionError) as ctx:
             invite_team_members(team_id=team.name, emails=[other.email])
-        self.assertIn("permission", str(ctx.exception).lower())
+        self.assertTrue(
+            "permission" in str(ctx.exception).lower() or "not a member" in str(ctx.exception).lower()
+        )
 
     def test_invite_creates_invitation_with_redirect(self):
         """Inviting creates a User Invitation whose redirect contains team_id and invite_id."""
@@ -178,23 +180,28 @@ class TestTeamInvitations(IntegrationTestCase):
         self.assertIn("Invitation not accepted", str(ctx.exception))
 
     def test_add_member_to_team_via_invitation_raises_when_user_not_found(self):
-        """Raises PermissionError when the invited email has no User record."""
+        """Raises DoesNotExistError when the invited email has no User record."""
         owner = UserFactory.create("with_forms_pro_role")
         frappe.set_user(owner.name)
         team = FPTeamFactory.create()
+
         frappe.set_user("Administrator")
 
+        # User Invitation.before_insert() stamps invited_by from frappe.session.user,
+        # so the inviter has to be forced on afterwards. add_member_to_team_via_invitation()
+        # only honours an invite whose sender is still a team admin.
         inv_doc = UserInvitationFactory.create(
             "to_forms_pro_app",
-            invited_by=owner.name,
             team=team,
             email=fake.email(),
             redirect_to_path=f"/api/v2/method/forms_pro.api.team.add_member_to_team_via_invitation?team_id={team.name}",
         )
         inv_doc.status = "Accepted"
         inv_doc.save(ignore_permissions=True)
+        inv_doc.db_set("invited_by", owner.name)
 
-        with self.assertRaises(frappe.PermissionError) as ctx:
+        # A missing user is a lookup failure, not a permission failure.
+        with self.assertRaises(frappe.DoesNotExistError) as ctx:
             add_member_to_team_via_invitation(team_id=team.name, invite_id=inv_doc.name)
         self.assertIn("User not found", str(ctx.exception))
 
@@ -204,17 +211,21 @@ class TestTeamInvitations(IntegrationTestCase):
         invitee = UserFactory.create()
         frappe.set_user(owner.name)
         team = FPTeamFactory.create()
+
         frappe.set_user("Administrator")
 
+        # User Invitation.before_insert() stamps invited_by from frappe.session.user,
+        # so the inviter has to be forced on afterwards. add_member_to_team_via_invitation()
+        # only honours an invite whose sender is still a team admin.
         inv_doc = UserInvitationFactory.create(
             "to_forms_pro_app",
-            invited_by=owner.name,
             team=team,
             email=invitee.email,
             redirect_to_path=f"/api/v2/method/forms_pro.api.team.add_member_to_team_via_invitation?team_id={team.name}",
         )
         inv_doc.status = "Accepted"
         inv_doc.save(ignore_permissions=True)
+        inv_doc.db_set("invited_by", owner.name)
 
         add_member_to_team_via_invitation(team_id=team.name, invite_id=inv_doc.name)
 

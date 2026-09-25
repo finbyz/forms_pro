@@ -1,7 +1,7 @@
 from typing import Any
 
 from faker import Faker
-from frappe_factory_bot.frappe_factory_bot.base_factory import BaseFactory
+from forms_pro.tests.factories.base_factory import BaseFactory
 
 from forms_pro.forms_pro.doctype.form.form import Form
 

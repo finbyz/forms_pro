@@ -14,3 +14,8 @@ def get_context(context):
     # developer mode
     context.is_developer_mode = frappe.conf.developer_mode
     context.csrf_token = csrf_token
+
+    if hasattr(frappe.local, "response_headers"):
+        frappe.local.response_headers.set("Content-Security-Policy", "frame-ancestors *")
+        frappe.local.response_headers.set("X-Frame-Options", "ALLOWALL")
+

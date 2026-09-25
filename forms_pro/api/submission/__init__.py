@@ -1,4 +1,5 @@
 from .endpoints import (
+    get_submission_for_document,
     get_all_submissions,
     get_submission,
     get_submission_response,
@@ -7,6 +8,7 @@ from .endpoints import (
 )
 
 __all__ = [
+    "get_submission_for_document",
     "get_all_submissions",
     "get_submission",
     "get_submission_response",

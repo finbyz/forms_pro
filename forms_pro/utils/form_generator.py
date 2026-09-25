@@ -9,7 +9,7 @@ FORMS_PRO_ROLE = "Forms Pro User"
 
 
 @frappe.whitelist(methods=["POST"])
-def create_form_with_doctype(team_id: str, doctype: str):
+def create_form_with_doctype(team_id: str, doctype: str, form_name: str | None = None):
     roles = frappe.get_roles(frappe.session.user)
     if FORMS_PRO_ROLE not in roles:
         frappe.throw(
@@ -18,8 +18,12 @@ def create_form_with_doctype(team_id: str, doctype: str):
         )
 
     try:
-        form_generator = FormGenerator(team_id=team_id, target_doctype=doctype)
+        form_generator = FormGenerator(
+            team_id=team_id, target_doctype=doctype, form_name=form_name
+        )
         form_generator.generate()
+    except (frappe.DuplicateEntryError, frappe.ValidationError):
+        raise
     except Exception as e:
         frappe.log_error(f"Error creating form with doctype: {doctype} - {e}")
         frappe.throw(
@@ -33,7 +37,7 @@ def create_form_with_doctype(team_id: str, doctype: str):
 
 
 @frappe.whitelist(methods=["POST"])
-def create_form(team_id: str):
+def create_form(team_id: str, form_name: str):
     roles = frappe.get_roles(frappe.session.user)
     if FORMS_PRO_ROLE not in roles:
         frappe.throw(
@@ -42,8 +46,10 @@ def create_form(team_id: str):
         )
 
     try:
-        form_generator = FormGenerator(team_id=team_id)
+        form_generator = FormGenerator(team_id=team_id, form_name=form_name)
         form_generator.generate()
+    except (frappe.DuplicateEntryError, frappe.ValidationError):
+        raise
     except Exception as e:
         frappe.log_error(f"Error creating form: {e}")
         frappe.throw(
@@ -85,14 +91,31 @@ SUBMISSION_STATUS_FIELDOPTIONS = {
     "in_list_view": 1,
 }
 
+def normalize_form_name(form_name: str) -> str:
+    """The form name doubles as the DocType name, so collapse whitespace only."""
+    name = " ".join((form_name or "").split()).strip()
+    if not name:
+        frappe.throw(_("Please enter a form name."), frappe.ValidationError)
+    return name
+
+
+@frappe.whitelist()
+def check_form_name_available(form_name: str) -> dict:
+    """Used by the create dialog to validate before submitting."""
+    name = normalize_form_name(form_name)
+    return {"name": name, "available": not bool(frappe.db.exists("DocType", name))}
+
+
 class FormGenerator:
     def __init__(
         self,
         team_id: str,
         target_doctype: str | None = None,
+        form_name: str | None = None,
     ) -> None:
         self.doctype = None
         self.team_id = team_id
+        self.form_name = form_name
         if target_doctype:
             self.doctype = frappe.get_doc("DocType", target_doctype)
 
@@ -105,8 +128,19 @@ class FormGenerator:
         if self.doctype:
             return
 
+        # The DocType is named after the form so the desk shows something
+        # meaningful, rather than a wall of generated formspro_* tables.
+        doctype_name = normalize_form_name(self.form_name)
+        if frappe.db.exists("DocType", doctype_name):
+            frappe.throw(
+                _("A DocType named {0} already exists. Please choose another form name.").format(
+                    doctype_name
+                ),
+                frappe.DuplicateEntryError,
+            )
+
         placeholder_doctype = frappe.new_doc("DocType")
-        placeholder_doctype.name = self._generate_doctype_name()
+        placeholder_doctype.name = doctype_name
         placeholder_doctype.module = "User Forms"
         placeholder_doctype.custom = True
         placeholder_doctype.track_changes = True
@@ -159,7 +193,7 @@ class FormGenerator:
     def _initialize_form_document(self) -> None:
         form_document = frappe.new_doc("Form")
         form_document.target_doctype = self.doctype.name
-        form_document.title = "Untitled Form"
+        form_document.title = self.form_name or self.doctype.name
         form_document.status = "Draft"
         form_document.linked_team_id = self.team_id
         form_document.document_type = "System"

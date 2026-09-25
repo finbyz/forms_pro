@@ -7,7 +7,7 @@ import { useEditSubmission } from "@/stores/editSubmission";
 import { computed, watch } from "vue";
 import FormRenderer from "@/components/submission/FormRenderer.vue";
 import { formatDateTime } from "@/utils/date";
-import { CircleDashed } from "@lucide/vue";
+
 
 const route = useRoute();
 const submissionFormStore = useSubmissionForm();
@@ -19,7 +19,7 @@ watch(
     () => {
         if (submissionFormStore.formResource.data) {
             editSubmissionStore.initialize(
-                submissionFormStore.formResource.data?.linked_doctype,
+                submissionFormStore.formResource.data?.target_doctype,
                 route.params.submissionName as string
             );
         }
@@ -100,7 +100,7 @@ const isDirty = computed(() => {
                     </div>
                 </div>
                 <Alert
-                    v-if="!submissionFormStore.formIsPublished"
+                    v-if="submissionFormStore.formIsPublished === false"
                     :dismissable="false"
                     title="Form is closed!"
                     theme="blue"
@@ -155,7 +155,7 @@ const isDirty = computed(() => {
                                 <Button
                                     v-if="editSubmissionStore.isSubmitted"
                                     label="Convert to draft"
-                                    :icon-left="CircleDashed"
+                                    :icon-left="'lucide-circle-dashed'"
                                     @click="editSubmissionStore.convertToDraft"
                                 />
                                 <Button

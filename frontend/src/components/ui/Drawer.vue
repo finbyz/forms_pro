@@ -115,13 +115,16 @@ const transitionName = computed(() => `drawer-${props.position}`);
                             {{ title }}
                         </h3>
                     </slot>
-                    <Button
-                        variant="ghost"
-                        icon="x"
-                        size="sm"
-                        class="ml-auto shrink-0"
-                        @click="close"
-                    />
+                    <div class="flex items-center gap-2 ml-auto shrink-0">
+                        <slot name="header-actions" :close="close" />
+                        <Button
+                            variant="ghost"
+                            icon="x"
+                            size="sm"
+                            class="shrink-0"
+                            @click="close"
+                        />
+                    </div>
                 </div>
 
                 <!-- Body -->

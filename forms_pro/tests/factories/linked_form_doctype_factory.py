@@ -2,7 +2,7 @@ from typing import Any
 
 from faker import Faker
 from frappe.model.document import Document
-from frappe_factory_bot.frappe_factory_bot.base_factory import BaseFactory
+from forms_pro.tests.factories.base_factory import BaseFactory
 
 from forms_pro.utils.form_generator import LINKED_FORM_FIELDOPTIONS, SUBMISSION_STATUS_FIELDOPTIONS
 

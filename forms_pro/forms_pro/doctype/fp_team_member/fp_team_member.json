@@ -5,7 +5,8 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "user"
+  "user",
+  "role"
  ],
  "fields": [
   {
@@ -13,6 +14,14 @@
    "fieldtype": "Link",
    "label": "User",
    "options": "User"
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "label": "Role",
+   "options": "Member\nAdmin",
+   "default": "Member",
+   "in_list_view": 1
   }
  ],
  "grid_page_length": 50,

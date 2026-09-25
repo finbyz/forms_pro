@@ -22,6 +22,8 @@ def get_submissions(form_name, limit=50, offset=0):
             "utm_medium",
             "utm_campaign",
             "response_json",
+            "payload",
+            "error_summary",
         ],
         order_by="submitted_at desc",
         limit=int(limit),

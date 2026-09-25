@@ -85,3 +85,30 @@ export function compact(fields: FormField[]): void {
       });
   }
 }
+
+/**
+ * Move `field` into the row above it as a new right-most column, turning that
+ * row into a multi-column row. No-op when there is no row above, or when the
+ * row above is empty.
+ *
+ * Returns true when the layout changed.
+ */
+export function placeBesideAbove(fields: FormField[], field: FormField): boolean {
+  if (!fields.includes(field)) return false;
+
+  const currentRow = field.row_index ?? 0;
+  if (currentRow <= 0) return false;
+
+  const targetRow = currentRow - 1;
+  const columnsAbove = fields
+    .filter((f) => f !== field && (f.row_index ?? 0) === targetRow)
+    .map((f) => f.column_index ?? 0);
+  if (!columnsAbove.length) return false;
+
+  field.row_index = targetRow;
+  field.column_index = Math.max(...columnsAbove) + 1;
+  field.cell_index = 0;
+
+  compact(fields);
+  return true;
+}

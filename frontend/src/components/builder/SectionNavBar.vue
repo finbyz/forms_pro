@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from "vue";
-import { Button, TextInput } from "frappe-ui";
+import { TextInput, FeatherIcon } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
 import { dialog } from "@/utils/dialog";
 
@@ -13,9 +13,6 @@ const editValue = ref("");
 const cancelRename = ref(false);
 
 function startRename(index: number) {
-    // Reset in case a prior Escape never triggered the input's @blur (DOM
-    // removal does not reliably fire blur), which would otherwise leave the
-    // flag stuck true and silently drop this rename.
     cancelRename.value = false;
     editValue.value = store.sections[index].label;
     editingIndex.value = index;
@@ -84,37 +81,34 @@ function confirmRemoveSection(index: number) {
 </script>
 
 <template>
-    <nav aria-label="Form steps" class="flex items-center gap-1.5 px-2 py-1.5 flex-wrap">
-        <template v-if="sectionCount <= 1">
-            <Button
-                variant="ghost"
-                size="sm"
-                label="Add Step"
-                icon-left="plus"
-                aria-label="Add Step"
-                tooltip="Click to add a new step to the form"
-                @click="store.addStep()"
-            />
-        </template>
-        <template v-else>
+    <nav aria-label="Form steps" class="flex items-center gap-2 px-3 py-2 flex-wrap">
+        <div class="inline-flex items-center gap-1 p-1 bg-surface-gray-2 rounded-xl border border-outline-gray-1/80 shadow-2xs">
             <template v-for="(section, idx) in store.sections" :key="section.label">
-                <Button
+                <button
                     v-if="editingIndex !== idx"
-                    :variant="idx === store.activeSectionIndex ? 'outline' : 'ghost'"
-                    size="sm"
-                    :label="section.label"
+                    type="button"
                     :aria-current="idx === store.activeSectionIndex ? 'true' : undefined"
                     @click="store.activeSectionIndex = idx"
                     @dblclick="startRename(idx)"
-                    tooltip="Double-click to rename"
-                    :class="{
-                        'shadow-sm': idx === store.activeSectionIndex,
-                    }"
+                    :title="'Double-click to rename ' + section.label"
+                    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-150"
+                    :class="
+                        idx === store.activeSectionIndex
+                            ? 'bg-surface-white text-ink-gray-9 shadow-xs font-semibold border border-outline-gray-2/40'
+                            : 'text-ink-gray-6 hover:text-ink-gray-9 hover:bg-surface-white/60'
+                    "
                 >
-                    <template v-if="idx > 0" #suffix>
-                        <span class="lucide-x w-3 h-3 text-ink-gray-4 text-ink-gray-7" aria-hidden="true" />
-                    </template>
-                </Button>
+                    <span>{{ section.label }}</span>
+                    <button
+                        v-if="idx > 0 && store.sections.length > 1"
+                        type="button"
+                        aria-label="Remove step"
+                        class="p-0.5 -mr-1 rounded-md text-ink-gray-4 hover:text-ink-red-6 hover:bg-surface-gray-3 transition-colors"
+                        @click.stop="confirmRemoveSection(idx)"
+                    >
+                        <FeatherIcon name="x" class="size-3" />
+                    </button>
+                </button>
                 <TextInput
                     v-else
                     ref="editInput"
@@ -123,38 +117,39 @@ function confirmRemoveSection(index: number) {
                     variant="outline"
                     @blur="finishRename(idx)"
                     @keydown="onEditKeydown($event, idx)"
-                    class="w-fit"
-                />
-                <span
-                    v-if="idx < store.sections.length - 1"
-                    class="w-1 h-1 rounded-full bg-outline-gray-3"
+                    class="w-28"
                 />
             </template>
-            <span class="w-1 h-1 rounded-full bg-outline-gray-3" />
-            <Button
-                variant="ghost"
-                size="sm"
-                label="Add Step"
-                icon="plus"
+
+            <!-- Add Step button -->
+            <button
+                type="button"
                 aria-label="Add Step"
-                tooltip="Click to add a new step to the form"
+                title="Add a new step"
                 @click="store.addStep()"
-            />
-        </template>
-        <Button
-            variant="ghost"
-            size="sm"
-            @click="store.activeSectionIndex = 'success'"
-            :class="{
-                'bg-green-50 text-green-700 hover:bg-green-100': store.activeSectionIndex === 'success',
-                'text-ink-gray-5 hover:bg-surface-gray-2': store.activeSectionIndex !== 'success'
-            }"
-            class="transition-colors"
-        >
-            <span class="flex items-center gap-1.5 px-1">
-                <span class="lucide-circle-check w-4 h-4 text-green-600 text-ink-gray-4" aria-hidden="true" />
-                Success
-            </span>
-        </Button>
+                class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-ink-gray-5 hover:text-ink-gray-9 hover:bg-surface-white/60 transition-all duration-150"
+            >
+                <FeatherIcon name="plus" class="size-3.5" />
+                <span v-if="sectionCount <= 1">Add Step</span>
+            </button>
+
+            <!-- Divider -->
+            <div class="h-4 w-px bg-outline-gray-2/60 mx-0.5" aria-hidden="true" />
+
+            <!-- Success Page tab -->
+            <button
+                type="button"
+                @click="store.activeSectionIndex = 'success'"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-150"
+                :class="
+                    store.activeSectionIndex === 'success'
+                        ? 'bg-surface-white text-ink-green-7 shadow-xs font-semibold border border-emerald-200'
+                        : 'text-ink-gray-6 hover:text-ink-green-7 hover:bg-surface-white/60'
+                "
+            >
+                <FeatherIcon name="check-circle" class="size-3.5 text-ink-green-6" />
+                <span>Success</span>
+            </button>
+        </div>
     </nav>
 </template>

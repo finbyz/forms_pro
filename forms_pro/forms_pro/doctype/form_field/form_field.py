@@ -31,6 +31,10 @@ FORM_TO_FRAPPE_FIELDTYPE: dict[str, dict] = {
     "Rating": {"fieldtype": "Rating"},
     "Table": {"fieldtype": "Table"},
     "Multiselect": {"fieldtype": "JSON"},
+    # Mirrors how Frappe itself stores a language: a Link to the Language
+    # doctype, which is autonamed by language_code, so the stored value is the
+    # code ("de") while the user picks the native name ("Deutsch").
+    "Language": {"fieldtype": "Link", "options": "Language"},
     "Heading 1": {"fieldtype": "HTML"},
     "Heading 2": {"fieldtype": "HTML"},
     "Heading 3": {"fieldtype": "HTML"},
@@ -76,6 +80,7 @@ class FormField(Document):
             "Phone",
             "Table",
             "Multiselect",
+            "Language",
             "Heading 1",
             "Heading 2",
             "Heading 3",

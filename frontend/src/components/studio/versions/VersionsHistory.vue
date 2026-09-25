@@ -79,7 +79,7 @@ onMounted(fetchVersions);
             <div class="mx-auto max-w-3xl space-y-5 pb-12 px-6 py-6">
                 <!-- Empty state -->
                 <div v-if="!loading && versions.length === 0" class="flex flex-col items-center py-24 gap-4 text-center">
-                    <span class="lucide-git-branch w-12 h-12 text-ink-gray-4" aria-hidden="true" />
+                    <lucide-git-branch class="w-12 h-12 text-ink-gray-4" aria-hidden="true" />
                     <div>
                         <p class="text-base text-ink-gray-7">No published versions yet</p>
                         <p class="text-sm text-ink-gray-5 mt-1.5">Publish the form to create the first immutable snapshot</p>

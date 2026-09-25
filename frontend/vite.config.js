@@ -11,9 +11,13 @@ export default defineConfig({
             jinjaBootData: true,
             lucideIcons: true,
             buildConfig: {
-                indexHtmlPath: "../forms_pro/www/frontend.html",
+                // The /forms route serves www/forms.py + forms.html (see
+                // hooks.py website_route_rules). Write the entry there directly so a
+                // plain `vite build` is complete — frontend.html has no .py beside it
+                // and was never served.
+                indexHtmlPath: "../forms_pro/www/forms.html",
                 emptyOutDir: true,
-                sourcemap: true,
+                sourcemap: false,
             },
         }),
         vue(),
@@ -23,11 +27,18 @@ export default defineConfig({
         outDir: "../forms_pro/public/frontend",
         emptyOutDir: true,
         target: "es2015",
-        sourcemap: true,
+        sourcemap: false,
     },
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "src"),
+            // Deep alias so the rich-text editor can be code-split on its own.
+            // The package's exports map has no subpath for it, and going through
+            // the barrel would pull ProseMirror into the eager graph.
+            "frappe-ui-text-editor": path.resolve(
+                __dirname,
+                "node_modules/frappe-ui/src/components/TextEditor/TextEditor.vue"
+            ),
             "tailwind.config.js": path.resolve(__dirname, "tailwind.config.js"),
         },
     },

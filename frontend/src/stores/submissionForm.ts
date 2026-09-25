@@ -1,5 +1,6 @@
 import { createResource } from "frappe-ui";
 import { toast } from "vue-sonner";
+import { getRecaptchaToken, warmRecaptcha } from "@/utils/recaptcha";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { FormField } from "@/types/formfield";
@@ -111,6 +112,9 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
         }
 
         inFormFillingState.value = true;
+
+        // Fetch Google's script now so the first submit isn't waiting on it.
+        warmRecaptcha(data.captcha_site_key);
       },
     });
 
@@ -133,6 +137,24 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
       }
     }
 
+    // Drafts are the user's own in-progress work and are not CAPTCHA-checked
+    // server-side, so don't burn a token on them.
+    let captchaToken: string | null = null;
+    if (!is_draft && formResource.value?.data?.captcha_enabled) {
+      try {
+        captchaToken = await getRecaptchaToken(
+          formResource.value.data.captcha_site_key,
+          "submit"
+        );
+      } catch {
+        errors.value = [
+          "Could not verify that you are human. Please reload the page and try again.",
+        ];
+        toast.error("CAPTCHA could not be loaded");
+        return;
+      }
+    }
+
     const _submit_doc = createResource({
       url: "forms_pro.api.submission.submit_form_response",
       makeParams() {
@@ -145,6 +167,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
           submission_status: is_draft
             ? SubmissionStatus.DRAFT
             : SubmissionStatus.SUBMITTED,
+          captcha_token: captchaToken,
         };
       },
       onSuccess() {
@@ -171,6 +194,34 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     await _submit_doc.fetch();
   }
 
+  // Deliberately permissive: enough to catch a typo, not so strict that it
+  // rejects a legitimate address. The server re-checks anyway.
+  const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  /** A phone number once punctuation is stripped: 6-15 digits, per E.164. */
+  function isPlausiblePhone(value: string): boolean {
+    const digits = (value ?? "").replace(/\D/g, "");
+    return digits.length >= 6 && digits.length <= 15;
+  }
+
+  function formatError(field: FormField, value: any): string | null {
+    if (value === undefined || value === null || value === "") return null;
+
+    if (field.fieldtype === "Email" && !EMAIL_PATTERN.test(String(value))) {
+      return `${field.label} must be a valid email address`;
+    }
+
+    if (field.fieldtype === "Phone" && !isPlausiblePhone(String(value))) {
+      return `${field.label} must be a valid phone number`;
+    }
+
+    if (field.fieldtype === "Number" && Number.isNaN(Number(value))) {
+      return `${field.label} must be a number`;
+    }
+
+    return null;
+  }
+
   function validateValues(fieldsToValidate?: FormField[]) {
     errors.value = [];
     const allFields = formResource.value.data.fields || [];
@@ -183,10 +234,15 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
       }
 
       const isRequired = shouldFieldBeRequired(field, fields.value, allFields);
+      const value = fields.value[field.fieldname];
 
-      if (isRequired && !fields.value[field.fieldname]) {
+      if (isRequired && !value) {
         errors.value.push(`${field.label} is required`);
+        return;
       }
+
+      const problem = formatError(field, value);
+      if (problem) errors.value.push(problem);
     });
   }
 
