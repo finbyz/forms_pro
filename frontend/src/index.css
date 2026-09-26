@@ -231,3 +231,19 @@
   outline: 2px solid var(--fp-primary-hover-color);
   outline-offset: 2px;
 }
+
+/*
+ * Two tokens the Design tab offered that changed nothing on the page.
+ *
+ * `--fp-field-gap` was never referenced by any rule, so the spacing slider was
+ * inert. `--fp-primary-color` only tinted the submit button, so choosing a
+ * brand colour looked like it had been ignored -- headings are where people
+ * expect to see it.
+ */
+.fp-themed .fp-field-stack {
+  gap: var(--fp-field-gap);
+}
+
+.fp-themed :where(h1, h2, h3) {
+  color: var(--fp-primary-color);
+}

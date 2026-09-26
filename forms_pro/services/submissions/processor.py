@@ -196,19 +196,32 @@ class SubmissionProcessor:
         so it cannot blank an existing value under the "Update Existing"
         strategy.
         """
+        target_meta = frappe.get_meta(self.form_doc.target_doctype)
         mapped: dict[str, Any] = {}
+
         for field in self.form_doc.fields:
-            if not (field.target_field and field.mapping_type):
+            # A field added from the palette carries no `target_field`; the
+            # builder only fills that in when a DocType column is picked. When
+            # the form's own fieldname matches a column on the target, that is
+            # plainly the column meant, so use it. Without this a hidden field
+            # with a preset value was dropped on the floor -- the whole point of
+            # "set it, hide it, every submission gets it" silently did nothing.
+            target = field.target_field
+            if not target and target_meta.has_field(field.fieldname):
+                target = field.fieldname
+            if not (target and field.mapping_type):
                 continue
 
             if field.mapping_type == "Constant":
-                mapped[field.target_field] = field.default
+                mapped[target] = field.default
             elif field.mapping_type == "Direct":
-                if field.hidden:
+                # Hidden and read-only fields are both set by whoever built the
+                # form, never by the visitor, so the payload is ignored for them.
+                if field.hidden or getattr(field, "read_only", 0):
                     if field.default not in (None, ""):
-                        mapped[field.target_field] = field.default
+                        mapped[target] = field.default
                 else:
-                    mapped[field.target_field] = self.form_data.get(
+                    mapped[target] = self.form_data.get(
                         field.fieldname
                     ) or self.form_data.get(field.field_key)
         return mapped

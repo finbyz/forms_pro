@@ -58,7 +58,8 @@ class FormField(Document):
         column_index: DF.Int
         conditional_logic: DF.Code | None
         default: DF.SmallText | None
-        description: DF.SmallText | None
+        description: DF.SmallText
+        placeholder: DF.Data | None | None
         fieldname: DF.Data
         fieldtype: DF.Literal[
             "Attach",
@@ -87,6 +88,7 @@ class FormField(Document):
             "Page Break",
         ]
         hidden: DF.Check
+        read_only: DF.Check
         label: DF.Data
         options: DF.SmallText | None
         parent: DF.Data

@@ -46,6 +46,14 @@ const builderExtrasComponent = computed(
 );
 
 const { options: selectOptions } = useFieldOptions(fieldData);
+
+/**
+ * A read-only field is displayed but never editable by the visitor -- it
+ * mirrors a DocType column they are not allowed to set (Supplier's Mobile and
+ * Email, for instance, are fetched from the primary contact). In the builder
+ * the control is already inert, so this only matters on the live form.
+ */
+const isDisabled = computed(() => props.disabled || !!fieldData.value.read_only);
 </script>
 
 <template>
@@ -56,7 +64,7 @@ const { options: selectOptions } = useFieldOptions(fieldData);
                 v-model="modelValue"
                 :field="fieldData"
                 :class="{ 'pointer-events-none mt-1': inEditMode }"
-                :disabled="disabled"
+                :disabled="isDisabled"
             />
             <div class="flex flex-col gap-1 w-full">
                 <FieldLabel
@@ -81,7 +89,7 @@ const { options: selectOptions } = useFieldOptions(fieldData);
                 :field="fieldData"
                 :in-edit-mode="inEditMode"
                 :class="{ 'pointer-events-none': inEditMode }"
-                :disabled="disabled"
+                :disabled="isDisabled"
             />
         </div>
 
@@ -114,7 +122,7 @@ const { options: selectOptions } = useFieldOptions(fieldData);
                 v-model="modelValue"
                 :field="fieldData"
                 :class="{ 'pointer-events-none': inEditMode }"
-                :disabled="disabled"
+                :disabled="isDisabled"
             />
             <small class="text-gray-500">{{ fieldData.description }}</small>
         </div>
@@ -140,7 +148,7 @@ const { options: selectOptions } = useFieldOptions(fieldData);
                 v-model="modelValue"
                 :field="fieldData"
                 :class="{ 'pointer-events-none': inEditMode }"
-                :disabled="disabled"
+                :disabled="isDisabled"
                 :options="selectOptions"
             />
             <small class="text-gray-500">{{ fieldData.description }}</small>

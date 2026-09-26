@@ -534,9 +534,23 @@ export const useEditForm = defineStore("editForm", () => {
   function buildFieldFromDoctype(field: any, idx: number): FormField {
     // The sidebar already maps fieldtype, but re-resolve here so a field added
     // by any path inherits Email/Phone semantics from the DocType.
+    // Never fall back to the raw Frappe fieldtype -- it is not one of ours and
+    // the renderer cannot draw it. Anything unmapped becomes a text box.
     const resolved =
       (mapDoctypeFieldForForm(field.fieldtype, field.options) as Fieldtype) ??
-      (field.fieldtype as Fieldtype);
+      Fieldtype.DATA;
+
+    /**
+     * A column the visitor cannot fill in.
+     *
+     * Three separate signals mean the same thing: the column is flagged
+     * read only, its Frappe type *is* "Read Only", or its value is fetched
+     * from another document (Supplier's Mobile and Email are pulled from the
+     * primary contact). In every case a submitted value would be ignored or
+     * overwritten, so the field is shown but not editable.
+     */
+    const isReadOnly =
+      !!field.read_only || field.fieldtype === "Read Only" || !!field.fetch_from;
 
     // "Email"/"Phone" are markers, not a Select option list.
     const isSemanticMarker =
@@ -551,7 +565,9 @@ export const useEditForm = defineStore("editForm", () => {
       default: field.default,
       description: field.description,
       // A field imported from the target DocType inherits its mandatoriness.
-      reqd: !!field.reqd,
+      // A read-only column cannot also be required of the visitor.
+      reqd: isReadOnly ? false : !!field.reqd,
+      read_only: isReadOnly,
       mapping_type: "Direct",
       target_field: field.fieldname,
       source_type: "Target Field",

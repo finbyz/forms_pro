@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { useManageForm } from "@/stores/form/manageForm";
 
-import { ListView, Badge, createResource, Dropdown, Button, Tooltip } from "frappe-ui";
+import { ListView, Badge, Dropdown, Button, Tooltip } from "frappe-ui";
+import SubmissionFilterBar from "@/components/submissions/SubmissionFilterBar.vue";
+import SubmissionPager from "@/components/submissions/SubmissionPager.vue";
+import { useSubmissionQuery } from "@/composables/useSubmissionQuery";
 import { formatDateTime } from "@/utils/date";
 import Avatar from "@/components/ui/Avatar.vue";
 import Drawer from "@/components/ui/Drawer.vue";
@@ -79,20 +82,23 @@ function openDeskForm() {
     }
 }
 
-const allSubmissionsResource = createResource({
-    url: "forms_pro.api.submission.get_all_submissions",
-    makeParams() {
-        return {
-            form_id: effectiveFormId.value,
-        };
-    },
-    onError(error: Error) {
-        toast.error("Failed to fetch submissions", {
-            description: error.message,
-        });
-    },
-});
-const allSubmissions = computed(() => allSubmissionsResource.data ?? []);
+/**
+ * Submissions arrive one page at a time.
+ *
+ * This list used to call `get_all_submissions`, which had no limit: a form
+ * that had collected for a year handed every row to the browser at once, and
+ * there was no way to narrow them. Paging, sorting and filtering now happen in
+ * the database.
+ */
+const submissionQuery = useSubmissionQuery(() => effectiveFormId.value, { pageLength: 20 });
+const allSubmissions = computed(() => submissionQuery.rows.value);
+
+watch(
+    () => submissionQuery.error.value,
+    (message) => {
+        if (message) toast.error("Failed to fetch submissions", { description: message });
+    }
+);
 
 /**
  * Deep link from the desk: a record created by a form carries a button that
@@ -107,23 +113,33 @@ let openedFromQuery = false;
 watch(
     [allSubmissions, () => route.query.submission],
     ([rows, wanted]) => {
-        if (!wanted || openedFromQuery || !rows?.length) return;
-        const match = (rows as Record<string, any>[]).find((row) => row.name === wanted);
-        if (!match) return;
+        if (!wanted || openedFromQuery) return;
+        const match = (rows as Record<string, any>[] | undefined)?.find((row) => row.name === wanted);
         openedFromQuery = true;
-        selectedSubmission.value = match;
+        // A deep-linked submission need not be on the page being shown, so open
+        // it by id rather than requiring it in the loaded rows.
+        selectedSubmission.value = match ?? { name: wanted };
         loadedSubmissionDetails.value = null;
         drawerOpen.value = true;
     },
     { immediate: true }
 );
 
-allSubmissionsResource.fetch();
+submissionQuery.loadFilterFields();
+submissionQuery.fetchPage();
+
+// Switching forms must reset the pager as well as the rows, or page 4 of the
+// previous form silently becomes page 4 of this one.
+watch(effectiveFormId, (formId) => {
+    if (!formId) return;
+    submissionQuery.loadFilterFields();
+    submissionQuery.reload();
+});
 
 async function refreshSubmissions() {
     isRefreshing.value = true;
     try {
-        await allSubmissionsResource.fetch({ form_id: effectiveFormId.value });
+        await submissionQuery.fetchPage();
         toast.success("Submissions reloaded");
     } catch (error: any) {
         toast.error("Failed to reload submissions", {
@@ -173,7 +189,9 @@ const onExport = (fileType: "CSV" | "Excel") => {
         toast.error("Unable to export", { description: "No form selected." });
         return;
     }
+    // Export what the operator is looking at, not the whole form.
     const params = new URLSearchParams({ form_id: formId, file_type: fileType });
+    if (submissionQuery.search.value.trim()) params.set("search", submissionQuery.search.value.trim());
     window.location.href = `/api/method/forms_pro.api.export.export_submissions?${params}`;
 };
 
@@ -191,7 +209,22 @@ const dropdownItems = computed(() => [
 ]);
 </script>
 <template>
-    <div>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <SubmissionFilterBar
+            class="flex-1 min-w-0"
+            :filters="submissionQuery.filters.value"
+            :columnFields="submissionQuery.columnFields.value"
+            :answerFields="submissionQuery.answerFields.value"
+            :operators="submissionQuery.operators.value"
+            :search="submissionQuery.search.value"
+            :activeFilterCount="submissionQuery.activeFilterCount.value"
+            :loading="submissionQuery.loading.value"
+            @update:search="(value: string) => (submissionQuery.search.value = value)"
+            @add="submissionQuery.addFilter"
+            @remove="submissionQuery.removeFilter"
+            @apply="submissionQuery.reload"
+            @clear="submissionQuery.clearFilters"
+        />
         <Dropdown
             :button="{
                 label: 'Export',
@@ -237,6 +270,21 @@ const dropdownItems = computed(() => [
             <span v-else class="text-sm">{{ item }}</span>
         </template>
     </ListView>
+
+    <SubmissionPager
+        :rangeFrom="submissionQuery.rangeFrom.value"
+        :rangeTo="submissionQuery.rangeTo.value"
+        :total="submissionQuery.total.value"
+        :page="submissionQuery.page.value"
+        :pageCount="submissionQuery.pageCount.value"
+        :pageLength="submissionQuery.pageLength.value"
+        :pageLengths="submissionQuery.pageLengths.value"
+        :hasMore="submissionQuery.hasMore.value"
+        :loading="submissionQuery.loading.value"
+        @previous="submissionQuery.previousPage"
+        @next="submissionQuery.nextPage"
+        @update:pageLength="(value: number) => (submissionQuery.pageLength.value = value)"
+    />
 
     <Drawer v-model="drawerOpen" size="lg" title="Submission Details">
         <template #header-actions>

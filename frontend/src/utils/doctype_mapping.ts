@@ -1,6 +1,10 @@
 /**
  * Maps a Frappe DocType field onto the equivalent Forms Pro field type.
  *
+ * Returns `undefined` only for types that genuinely have no place on a form
+ * (layout breaks, buttons). Callers must not fall back to the raw Frappe
+ * fieldtype: it is not a Forms Pro type, and the renderer cannot draw it.
+ *
  * Kept free of the component registry (which pulls in frappe-ui) so the mapping
  * can be unit tested on its own.
  */
@@ -38,12 +42,28 @@ export const mapDoctypeFieldForForm = (
     Percent: Fieldtype.NUMBER,
     Phone: Fieldtype.PHONE,
     Rating: Fieldtype.RATING,
+    // A Frappe "Read Only" column is a Data value the user may not edit. It was
+    // falling through this map, so importing Supplier's Mobile/Email -- both of
+    // which are "Read Only", not "Data" -- produced a field with an unknown
+    // type that rendered as an Attach box.
+    "Read Only": Fieldtype.DATA,
     Select: Fieldtype.SELECT,
     "Small Text": Fieldtype.TEXTAREA,
     Table: Fieldtype.TABLE,
     Text: Fieldtype.TEXTAREA,
     "Text Editor": Fieldtype.TEXT_EDITOR,
     Time: Fieldtype.TIME_PICKER,
+    // Frappe types with no dedicated widget here; a text box holds the value
+    // safely rather than leaving the field unmapped.
+    Barcode: Fieldtype.DATA,
+    Code: Fieldtype.TEXTAREA,
+    Color: Fieldtype.DATA,
+    Duration: Fieldtype.DATA,
+    "Dynamic Link": Fieldtype.DATA,
+    Icon: Fieldtype.DATA,
+    JSON: Fieldtype.TEXTAREA,
+    Signature: Fieldtype.DATA,
+    "Table MultiSelect": Fieldtype.MULTISELECT,
   };
 
   return FRAPPE_TO_FORM_TYPE[fieldtype];

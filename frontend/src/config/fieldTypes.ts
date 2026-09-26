@@ -20,13 +20,13 @@
 
 import { defineAsyncComponent, type Component } from "vue";
 import Language from "@/components/fields/Language.vue";
+import SearchSelect from "@/components/fields/SearchSelect.vue";
 import {
   Checkbox,
   DatePicker,
   DateRangePicker,
   DateTimePicker,
   Password,
-  Select,
   Switch,
   Textarea,
   TimePicker,
@@ -222,9 +222,9 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   },
   {
     name: Fieldtype.SELECT,
-    component: Select,
+    component: SearchSelect,
     icon: List,
-    props: { variant: "outline" },
+    props: {},
     layout: "default",
     frappeFieldtype: "Select",
     isBoolean: false,
@@ -290,9 +290,11 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   },
   {
     name: Fieldtype.LINK,
-    component: Select,
+    // Searchable: a Link to User or Contact can have hundreds of options, and
+    // a native <select> gives no way to find one.
+    component: SearchSelect,
     icon: Link2,
-    props: { variant: "outline" },
+    props: {},
     layout: "default",
     frappeFieldtype: "Link",
     isBoolean: false,

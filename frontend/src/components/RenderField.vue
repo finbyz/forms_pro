@@ -45,6 +45,7 @@ const getComponent = computed(() => {
         :options="resolvedOptions"
         :in-edit-mode="props.inEditMode"
         :disabled="props.disabled"
+        :placeholder="props.field.placeholder || undefined"
         v-bind="getComponent.props"
     />
 </template>

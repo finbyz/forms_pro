@@ -45,7 +45,7 @@ function colKey(col: FormField[], cIdx: number) {
     </div>
     <div v-if="store.inFormFillingState" class="flex flex-col overflow-hidden">
         <!-- Fields (enter-only animation on step change) -->
-        <div :key="store.currentStepIndex" :class="animClass" class="flex flex-col gap-4">
+        <div :key="store.currentStepIndex" :class="animClass" class="fp-field-stack flex flex-col gap-4">
             <template v-for="(row, rIdx) in groupedRows" :key="rowKey(row, rIdx)">
                 <div
                     v-if="row.some((col) => col.some(isFieldVisible))"
@@ -111,7 +111,8 @@ function colKey(col: FormField[], cIdx: number) {
                     <Button
                         v-if="store.allowIncompleteForms && store.isLastStep"
                         @click="store.saveAsDraft"
-                        :loading="store.isLoading"
+                        :loading="store.isLoading || store.isSubmitting"
+                        :disabled="store.isSubmitting"
                     >
                         Save as draft
                     </Button>
@@ -120,7 +121,8 @@ function colKey(col: FormField[], cIdx: number) {
                         variant="solid"
                         class="fp-primary-action"
                         @click="store.handleNextStep"
-                        :loading="store.isLoading"
+                        :loading="store.isLoading || store.isSubmitting"
+                        :disabled="store.isSubmitting"
                     >
                         <span class="flex items-center gap-1.5">
                             Next
@@ -132,7 +134,8 @@ function colKey(col: FormField[], cIdx: number) {
                         variant="solid"
                         class="fp-primary-action"
                         @click="store.submitForm()"
-                        :loading="store.isLoading"
+                        :loading="store.isLoading || store.isSubmitting"
+                        :disabled="store.isSubmitting"
                     >
                         Submit
                     </Button>

@@ -126,7 +126,30 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     submitForm(true, true);
   }
 
+  /**
+   * Guards against a double submission.
+   *
+   * `isLoading` only goes true once the submit resource starts, but the
+   * CAPTCHA token is awaited before that -- a round trip to Google during
+   * which the Submit button is still live. A second click in that window ran
+   * the whole thing again and created a second record.
+   */
+  const isSubmitting = ref(false);
+
   async function submitForm(
+    is_draft: boolean = false,
+    ignore_validations: boolean = false
+  ) {
+    if (isSubmitting.value) return;
+    isSubmitting.value = true;
+    try {
+      return await _submitForm(is_draft, ignore_validations);
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  async function _submitForm(
     is_draft: boolean = false,
     ignore_validations: boolean = false
   ) {
@@ -267,6 +290,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     initialize,
     submitForm,
     saveAsDraft,
+    isSubmitting,
     steps,
     currentStepIndex,
     currentStepFields,

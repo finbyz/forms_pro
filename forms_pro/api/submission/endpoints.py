@@ -12,6 +12,7 @@ from forms_pro.forms_pro.doctype.form_field.form_field import _DISPLAY_ONLY_FIEL
 from forms_pro.utils.form_generator import SubmissionStatus
 from forms_pro.utils.permissions import require_permission
 from forms_pro.api.v1.public.security import check_rate_limit, verify_captcha
+from forms_pro.services.submissions import listing
 
 from .schema import UserSubmissionResponse
 
@@ -103,7 +104,9 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
         if field.fieldtype in _DISPLAY_ONLY_FIELDTYPES:
             continue
         is_visible = not field.hidden
-        is_required = bool(field.reqd)
+        # A read-only field is displayed but not editable, so it can never be
+        # something the visitor failed to fill in.
+        is_required = bool(field.reqd) and not getattr(field, "read_only", 0)
 
         for other in form.fields:
             if not other.conditional_logic:
@@ -280,7 +283,12 @@ def get_submission(submission_doctype: str, submission_name: str) -> dict[str, A
 @require_permission("Form", "read", param="form_id")
 def get_all_submissions(form_id: str) -> list[UserSubmissionResponse]:
     """
-    Get all submissions for a form
+    Get a form's most recent submissions.
+
+    Kept for callers that only need a compact recent list. It is capped, because
+    a form that has collected for a year must not be able to hand the browser
+    every row it holds. Paged and filtered reads go through
+    :func:`list_submissions`.
 
     Args:
         form_id: The ID of the form
@@ -288,10 +296,53 @@ def get_all_submissions(form_id: str) -> list[UserSubmissionResponse]:
     Returns:
         A list of submissions for the form
     """
-    return _list_submissions(form_id)
+    return _list_submissions(form_id, limit=listing.MAX_PAGE_LENGTH)
 
 
-def _list_submissions(form_id: str, owner: str | None = None) -> list[UserSubmissionResponse]:
+@frappe.whitelist()
+@require_permission("Form", "read", param="form_id")
+def list_submissions(
+    form_id: str,
+    filters=None,
+    answer_filters=None,
+    search: str | None = None,
+    order_by: str | None = None,
+    limit_start=0,
+    limit_page_length=listing.DEFAULT_PAGE_LENGTH,
+    fields=None,
+    include_payload=False,
+) -> dict:
+    """One page of a form's submissions, filtered and sorted in SQL.
+
+    ``filters`` apply to the submission's own columns, ``answer_filters`` to the
+    form's questions inside the stored payload. The page is always bounded and
+    ``total`` counts the filtered set, so the pager stays honest.
+
+    Requires ``read`` on the Form; the query is pinned to it.
+    """
+    return listing.list_form_submissions(
+        form_id,
+        filters=filters,
+        answer_filters=answer_filters,
+        search=search,
+        order_by=order_by,
+        limit_start=limit_start,
+        limit_page_length=limit_page_length,
+        fields=fields,
+        include_payload=include_payload,
+    )
+
+
+@frappe.whitelist()
+@require_permission("Form", "read", param="form_id")
+def get_submission_filter_fields(form_id: str) -> dict:
+    """Every field an operator may filter this form's submissions by."""
+    return listing.submission_filter_fields(form_id)
+
+
+def _list_submissions(
+    form_id: str, owner: str | None = None, limit: int = listing.MAX_PAGE_LENGTH
+) -> list[UserSubmissionResponse]:
     """
     Read a form's submissions from FP Form Submission.
 
@@ -309,6 +360,7 @@ def _list_submissions(form_id: str, owner: str | None = None) -> list[UserSubmis
         filters=filters,
         fields=["name", "creation", "modified", "status", "owner"],
         order_by="creation desc",
+        limit=listing.coerce_page_length(limit),
     )
 
     return [

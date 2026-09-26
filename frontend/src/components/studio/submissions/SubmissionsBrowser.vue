@@ -1,60 +1,52 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
-import { Button, Badge, FormControl, Dropdown, FeatherIcon, Tooltip, createResource } from "frappe-ui";
+import { ref, onMounted, computed, watch } from "vue";
+import { Button, Badge, Dropdown, FeatherIcon, Tooltip } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
+import SubmissionFilterBar from "@/components/submissions/SubmissionFilterBar.vue";
+import SubmissionPager from "@/components/submissions/SubmissionPager.vue";
+import { useSubmissionQuery } from "@/composables/useSubmissionQuery";
 
 const editFormStore = useEditForm();
-const submissions = ref<any[]>([]);
-const total = ref(0);
-const limit = ref(50);
-const offset = ref(0);
-const loading = ref(false);
 const expandedRow = ref<string | null>(null);
-const searchQuery = ref("");
 const statusFilter = ref<string>("All");
 
 const formName = computed(() => editFormStore.originalFormData?.name ?? "");
 
-async function fetchSubmissions() {
-    if (!formName.value) return;
-    loading.value = true;
-    try {
-        const res = await createResource({
-            url: "forms_pro.api.v1.builder.data.get_submissions",
-            makeParams() {
-                return {
-                    form_name: formName.value,
-                    limit: limit.value,
-                    offset: offset.value,
-                };
-            }
-        }).submit();
-        submissions.value = res?.submissions ?? [];
-        total.value = res?.total ?? 0;
-    } catch (err) {
-        console.error("Failed to load submissions", err);
-    } finally {
-        loading.value = false;
-    }
+/**
+ * Submissions for the builder's Submissions tab.
+ *
+ * Search and the status filter used to run over `submissions.value`, which held
+ * only the page already fetched. Typing a name that existed on page 3 returned
+ * nothing and looked like an answer. Both now go to the database, and `total`
+ * counts the filtered set so the pager agrees with what is on screen.
+ */
+const submissionQuery = useSubmissionQuery(() => formName.value, { pageLength: 20 });
+const submissions = computed(() => submissionQuery.rows.value);
+const filteredSubmissions = submissions;
+const total = submissionQuery.total;
+const loading = submissionQuery.loading;
+
+function fetchSubmissions() {
+    return submissionQuery.fetchPage();
 }
 
-const filteredSubmissions = computed(() => {
-    let list = submissions.value;
-    if (statusFilter.value !== "All") {
-        list = list.filter(s => s.status === statusFilter.value);
-    }
-    if (searchQuery.value.trim()) {
-        const q = searchQuery.value.toLowerCase().trim();
-        list = list.filter(s =>
-            (s.name && s.name.toLowerCase().includes(q)) ||
-            (s.target_name && s.target_name.toLowerCase().includes(q)) ||
-            (s.target_doctype && s.target_doctype.toLowerCase().includes(q)) ||
-            (s.source_url && s.source_url.toLowerCase().includes(q)) ||
-            (s.utm_source && s.utm_source.toLowerCase().includes(q)) ||
-            (s.response_json && s.response_json.toLowerCase().includes(q))
-        );
-    }
-    return list;
+/** The status shortcut is a filter like any other, so it is applied in SQL. */
+function applyStatus(status: string) {
+    statusFilter.value = status;
+    const others = submissionQuery.filters.value.filter(
+        (entry) => !(entry.source === "column" && entry.field === "status")
+    );
+    submissionQuery.filters.value =
+        status === "All"
+            ? others
+            : [...others, { source: "column", field: "status", operator: "=", value: status }];
+    submissionQuery.reload();
+}
+
+watch(formName, (name) => {
+    if (!name) return;
+    submissionQuery.loadFilterFields();
+    submissionQuery.reload();
 });
 
 function toggleExpand(name: string) {
@@ -78,6 +70,9 @@ function formatPayload(raw: string) {
     }
 }
 
+/** Exports the rows on screen. The full filtered set downloads from the
+ * Submissions page, which streams server-side rather than building a string
+ * out of whatever the browser happens to hold. */
 function exportSubmissionsCSV() {
     if (!filteredSubmissions.value.length) return;
     const headers = ["Submission ID", "Submitted At", "Status", "Target DocType", "Target Record", "Source URL", "UTM Source"];
@@ -100,19 +95,15 @@ function exportSubmissionsCSV() {
     URL.revokeObjectURL(url);
 }
 
-function loadMore() {
-    offset.value += limit.value;
-    fetchSubmissions();
-}
-
 const statusDropdownOptions = [
-    { label: "All Status", onClick: () => { statusFilter.value = "All"; } },
-    { label: "Success", onClick: () => { statusFilter.value = "Success"; } },
-    { label: "Failed", onClick: () => { statusFilter.value = "Failed"; } },
+    { label: "All Status", onClick: () => applyStatus("All") },
+    { label: "Success", onClick: () => applyStatus("Success") },
+    { label: "Failed", onClick: () => applyStatus("Failed") },
 ];
 
 onMounted(() => {
-    fetchSubmissions();
+    submissionQuery.loadFilterFields();
+    submissionQuery.fetchPage();
 });
 </script>
 
@@ -137,15 +128,6 @@ onMounted(() => {
 
             <!-- Controls -->
             <div class="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-                <FormControl
-                    type="search"
-                    placeholder="Search submissions..."
-                    v-model="searchQuery"
-                    variant="outline"
-                    size="sm"
-                    class="w-48 sm:w-60"
-                />
-
                 <!-- Status Filter Dropdown -->
                 <Dropdown
                     :button="{
@@ -167,6 +149,23 @@ onMounted(() => {
                     </Button>
                 </Tooltip>
             </div>
+        </div>
+
+        <div class="border-b border-outline-gray-1 bg-surface-base px-6 py-3 shrink-0">
+            <SubmissionFilterBar
+                :filters="submissionQuery.filters.value"
+                :columnFields="submissionQuery.columnFields.value"
+                :answerFields="submissionQuery.answerFields.value"
+                :operators="submissionQuery.operators.value"
+                :search="submissionQuery.search.value"
+                :activeFilterCount="submissionQuery.activeFilterCount.value"
+                :loading="submissionQuery.loading.value"
+                @update:search="(value: string) => (submissionQuery.search.value = value)"
+                @add="submissionQuery.addFilter"
+                @remove="submissionQuery.removeFilter"
+                @apply="submissionQuery.reload"
+                @clear="submissionQuery.clearFilters"
+            />
         </div>
 
         <!-- Table Container -->
@@ -193,10 +192,10 @@ onMounted(() => {
                                             <FeatherIcon name="inbox" class="size-6 text-ink-gray-4" />
                                         </div>
                                         <h3 class="text-sm-semibold text-ink-gray-9 mb-1">
-                                            {{ searchQuery || statusFilter !== 'All' ? 'No matching submissions' : 'No submissions yet' }}
+                                            {{ submissionQuery.activeFilterCount.value || submissionQuery.search.value ? 'No matching submissions' : 'No submissions yet' }}
                                         </h3>
                                         <p class="text-xs text-ink-gray-5 max-w-sm mb-4">
-                                            {{ searchQuery || statusFilter !== 'All' ? 'Try clearing your search or status filters.' : 'Share your form with respondents or test a submission from Preview.' }}
+                                            {{ submissionQuery.activeFilterCount.value || submissionQuery.search.value ? 'Try clearing your search or filters.' : 'Share your form with respondents or test a submission from Preview.' }}
                                         </p>
                                     </div>
                                 </td>
@@ -252,12 +251,20 @@ onMounted(() => {
                 </table>
             </div>
 
-            <!-- Load more -->
-            <div v-if="submissions.length < total" class="flex justify-center py-4 mt-2">
-                <Button variant="subtle" size="sm" :loading="loading" @click="loadMore">
-                    Load More ({{ submissions.length }} of {{ total }})
-                </Button>
-            </div>
+            <SubmissionPager
+                :rangeFrom="submissionQuery.rangeFrom.value"
+                :rangeTo="submissionQuery.rangeTo.value"
+                :total="submissionQuery.total.value"
+                :page="submissionQuery.page.value"
+                :pageCount="submissionQuery.pageCount.value"
+                :pageLength="submissionQuery.pageLength.value"
+                :pageLengths="submissionQuery.pageLengths.value"
+                :hasMore="submissionQuery.hasMore.value"
+                :loading="submissionQuery.loading.value"
+                @previous="submissionQuery.previousPage"
+                @next="submissionQuery.nextPage"
+                @update:pageLength="(value: number) => (submissionQuery.pageLength.value = value)"
+            />
         </div>
     </div>
 </template>

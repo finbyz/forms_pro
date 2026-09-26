@@ -36,6 +36,26 @@ describe("mapDoctypeFieldForForm", () => {
     expect(mapDoctypeFieldForForm("Phone")).toBe(Fieldtype.PHONE);
   });
 
+  it("maps a Frappe 'Read Only' column to a text field, not nothing", () => {
+    // Supplier.mobile_no and .email_id are fieldtype "Read Only", not "Data".
+    // Unmapped, they fell back to the raw Frappe type and rendered as an
+    // Attach box on the form.
+    expect(mapDoctypeFieldForForm("Read Only")).toBe(Fieldtype.DATA);
+  });
+
+  it("leaves no common Frappe input type unmapped", () => {
+    const INPUT_TYPES = [
+      "Autocomplete", "Attach", "Attach Image", "Barcode", "Check", "Code",
+      "Color", "Currency", "Data", "Date", "Datetime", "Duration",
+      "Dynamic Link", "Float", "HTML Editor", "Icon", "Int", "JSON", "Link",
+      "Long Text", "Markdown Editor", "Password", "Percent", "Phone", "Rating",
+      "Read Only", "Select", "Signature", "Small Text", "Table",
+      "Table MultiSelect", "Text", "Text Editor", "Time",
+    ];
+    const unmapped = INPUT_TYPES.filter((t) => !mapDoctypeFieldForForm(t));
+    expect(unmapped, `unmapped Frappe types: ${unmapped.join(", ")}`).toEqual([]);
+  });
+
   it("maps the other common Frappe types unchanged", () => {
     expect(mapDoctypeFieldForForm("Int")).toBe(Fieldtype.NUMBER);
     expect(mapDoctypeFieldForForm("Check")).toBe(Fieldtype.CHECKBOX);

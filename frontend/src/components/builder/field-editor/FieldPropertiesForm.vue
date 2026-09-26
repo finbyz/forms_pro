@@ -46,6 +46,17 @@ watch(
     }
 );
 
+/** Field types whose `options` is a newline-separated list of choices. */
+const OPTION_LIST_TYPES = new Set(["Select", "Multiselect"]);
+
+const takesOptionList = computed(() =>
+    OPTION_LIST_TYPES.has(String(editFormStore.selectedField?.fieldtype ?? ""))
+);
+
+const isLinkField = computed(
+    () => String(editFormStore.selectedField?.fieldtype ?? "") === "Link"
+);
+
 const fieldProperties = computed(() => {
     const hasTargetDoctype = !!editFormStore.formData?.target_doctype;
 
@@ -110,6 +121,17 @@ const fieldProperties = computed(() => {
             },
         },
         {
+            fieldname: "read_only",
+            component: FormControl,
+            props: {
+                type: "checkbox",
+                label: "Read Only",
+                description:
+                    "Shown to the visitor but not editable. Set automatically when the "
+                    + "DocType column is read only or fetched from another document.",
+            },
+        },
+        {
             fieldname: "description",
             component: FormControl,
             props: {
@@ -121,14 +143,30 @@ const fieldProperties = computed(() => {
             },
         },
         {
+            // Only the choice fields read `options` as a list. On a Link it is
+            // the DocType being linked to, and on Data/Email/Number it means
+            // nothing at all -- showing the same box everywhere invited people
+            // to type options that were saved and then silently ignored.
             fieldname: "options",
             component: FormControl,
+            visible: takesOptionList.value,
             props: {
                 type: "textarea",
                 label: "Options",
-                description: "Enter the options for the field, one per line.",
+                description: "One option per line.",
                 variant: "outline",
                 rows: 4,
+            },
+        },
+        {
+            fieldname: "options",
+            component: FormControl,
+            visible: isLinkField.value,
+            props: {
+                type: "text",
+                label: "Linked DocType",
+                description: "Records of this DocType are offered in the dropdown.",
+                variant: "outline",
             },
         },
         {
@@ -201,7 +239,7 @@ const fieldProperties = computed(() => {
 const groupedProperties = computed(() => {
     return {
         General: fieldProperties.value.filter(p => ["label", "fieldname", "placeholder", "fieldtype", "description"].includes(p.fieldname)),
-        Validation: fieldProperties.value.filter(p => ["reqd", "hidden", "default", "options"].includes(p.fieldname)),
+        Validation: fieldProperties.value.filter(p => ["reqd", "hidden", "read_only", "default", "options"].includes(p.fieldname)),
         Logic: fieldProperties.value.filter(p => ["target_field", "source_type", "mapping_type", "conditional_logic", "field_key"].includes(p.fieldname)),
     };
 });
@@ -234,7 +272,7 @@ const groupedProperties = computed(() => {
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
             <template v-if="editFormStore.selectedField">
-                <template v-for="property in groupedProperties[activeTab as keyof typeof groupedProperties]" :key="property.fieldname">
+                <template v-for="property in groupedProperties[activeTab as keyof typeof groupedProperties]" :key="`${property.fieldname}-${property.props.label}`">
                     <component
                         v-if="property.visible !== false"
                         :is="property.component"
