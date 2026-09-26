@@ -17,7 +17,30 @@ type LanguageOption = { value: string; label: string };
 
 const model = defineModel<string | null>();
 
-withDefaults(defineProps<{ disabled?: boolean }>(), { disabled: false });
+/**
+ * Fallthrough attributes must not reach the <Select>.
+ *
+ * RenderField hands every field component `field`, `options`, `in-edit-mode`
+ * and `placeholder`. Undeclared ones fall through to this component's root,
+ * and Vue applies them *after* the template's own bindings -- so the parent's
+ * `options` (which is `null`, because a Language field has no option string of
+ * its own) replaced the language list built here. The control rendered, showed
+ * its placeholder, and would not open, because a select with no options has
+ * nothing to show.
+ */
+defineOptions({ inheritAttrs: false });
+
+withDefaults(
+    defineProps<{
+        disabled?: boolean;
+        /** Accepted and ignored: the list is fetched, not passed in. */
+        options?: unknown;
+        field?: Record<string, unknown>;
+        inEditMode?: boolean;
+        placeholder?: string;
+    }>(),
+    { disabled: false, options: null, field: undefined, inEditMode: false, placeholder: "" }
+);
 
 /**
  * Shared across every Language field on a form — a form with a language
