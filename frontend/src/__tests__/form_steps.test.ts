@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { groupFieldsIntoSteps, insertFieldAtStepEnd } from "@/utils/form_steps";
+import {
+  groupFieldsIntoSteps,
+  insertFieldAtStepEnd,
+  removeStepKeepFields,
+  renameStep,
+} from "@/utils/form_steps";
 import type { FormField } from "@/types/formfield";
 
 const field = (fieldname: string, row: number): FormField =>
@@ -109,5 +114,46 @@ describe("moving a field between steps", () => {
 
     const steps = groupFieldsIntoSteps(fields);
     expect(steps[0].fields.map((f) => f.fieldname)).toContain("b");
+  });
+});
+
+describe("removing a step keeps the remaining step's name", () => {
+  /**
+   * The reported sequence: rename step 1 to "Contact Details", move step 2's
+   * fields into it, then delete step 2. The name used to revert to "Step 1",
+   * because renaming step 1 stores the label on a leading Page Break and the
+   * cleanup pass then discarded that row as orphaned.
+   */
+  it("keeps a renamed first step's label after the other step is deleted", () => {
+    const fields: FormField[] = [
+      field("name", 0),
+      pageBreak("Step 2", 1),
+      field("phone", 2),
+    ];
+
+    renameStep(fields, 0, "Contact Details");
+    expect(groupFieldsIntoSteps(fields)[0].label).toBe("Contact Details");
+
+    const steps = groupFieldsIntoSteps(fields);
+    removeStepKeepFields(fields, steps, 1);
+
+    const after = groupFieldsIntoSteps(fields, { labelFallback: (n) => `Step ${n}` });
+    expect(after).toHaveLength(1);
+    expect(after[0].label).toBe("Contact Details");
+    expect(after[0].fields.map((f) => f.fieldname)).toEqual(["name", "phone"]);
+  });
+
+  it("still drops a leading Page Break that carries no name", () => {
+    const fields: FormField[] = [
+      pageBreak("", 0),
+      field("name", 1),
+      pageBreak("Step 2", 2),
+      field("phone", 3),
+    ];
+
+    const steps = groupFieldsIntoSteps(fields);
+    removeStepKeepFields(fields, steps, 1);
+
+    expect(fields.some((f) => f.fieldtype === "Page Break")).toBe(false);
   });
 });

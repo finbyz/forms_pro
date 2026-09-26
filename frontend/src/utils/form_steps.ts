@@ -154,12 +154,27 @@ export function insertFieldAtStepEnd(
  * Removes a leading Page Break when it is the only one left —
  * a single-step form doesn't need a step label field.
  */
+/**
+ * Drop a leading Page Break that no longer separates anything.
+ *
+ * With one step left, a leading Page Break usually has nothing to divide. But
+ * it is also the *only* place step 1's name can live -- renaming step 1 creates
+ * exactly this row to hold the label. Removing it unconditionally meant that
+ * deleting the last other step silently renamed "Contact Details" back to
+ * "Step 1", because the row carrying the name had been thrown away.
+ *
+ * So it is only removed when it carries no name to lose.
+ */
 export function stripOrphanedLeadingPageBreak(fields: FormField[]): void {
-  const hasLeadingPB = fields[0] ? isPageBreak(fields[0].fieldtype) : false;
+  const leading = fields[0];
+  if (!leading || !isPageBreak(leading.fieldtype)) return;
+
   const pbCount = fields.filter((f) => isPageBreak(f.fieldtype)).length;
-  if (hasLeadingPB && pbCount === 1) {
-    fields.splice(0, 1);
-  }
+  if (pbCount !== 1) return;
+
+  if ((leading.label ?? "").trim()) return;
+
+  fields.splice(0, 1);
 }
 
 /** Appends a new step (Page Break) after the last field. */
