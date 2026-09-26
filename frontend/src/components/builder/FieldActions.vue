@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button } from "frappe-ui";
+import { Button, Dropdown } from "frappe-ui";
 
 
 defineProps<{
@@ -7,6 +7,8 @@ defineProps<{
     isDraggingAnyField: boolean;
     canEject: boolean;
     canMergeUp: boolean;
+    /** Other steps this field could be moved to; empty on a single-step form. */
+    stepOptions?: { label: string; onClick: () => void }[];
 }>();
 
 defineEmits<{
@@ -32,6 +34,22 @@ defineEmits<{
                 : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100',
         ]"
     >
+        <!--
+            Moving a field between steps had no route at all: the step tabs are
+            not drop targets, so a field dropped on the wrong step stayed there.
+        -->
+        <Dropdown
+            v-if="stepOptions && stepOptions.length"
+            :options="stepOptions"
+            placement="left"
+            :button="{
+                size: 'sm',
+                icon: 'corner-up-right',
+                variant: 'ghost',
+                tooltip: 'Move to another step',
+            }"
+            @click.stop
+        />
         <Button
             v-if="canMergeUp"
             size="sm"

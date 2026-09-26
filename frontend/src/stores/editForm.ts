@@ -784,6 +784,33 @@ export const useEditForm = defineStore("editForm", () => {
     activeSectionIndex.value = count;
   }
 
+  /**
+   * Move a field into another step.
+   *
+   * Steps are delimited by Page Break rows in one flat field list, so a field
+   * "belongs" to a step purely by where it sits between those breaks. There was
+   * no way to change that from the builder at all -- the step tabs are not drop
+   * targets and no action offered it -- so a field added to the wrong step was
+   * stuck there.
+   */
+  function moveFieldToStep(field: FormField, targetStepIndex: number) {
+    const fs: FormField[] = formResource.value?.doc?.fields;
+    if (!fs) return;
+
+    const from = fs.indexOf(field);
+    if (from === -1) return;
+    if (targetStepIndex < 0 || targetStepIndex >= sections.value.length) return;
+
+    fs.splice(from, 1);
+    insertFieldAtStepEnd(fs, field, targetStepIndex, sections.value.length > 1);
+    compact(fs);
+
+    activeSectionIndex.value = targetStepIndex;
+    selectedField.value = field;
+    snapshot();
+    triggerAutosave();
+  }
+
   function removeStepKeepFields(index: number) {
     const fs: FormField[] = formResource.value?.doc?.fields;
     if (!fs) return;
@@ -861,6 +888,7 @@ export const useEditForm = defineStore("editForm", () => {
     addField,
     addFieldFromDoctype,
     addStep,
+    moveFieldToStep,
     removeStepKeepFields,
     removeStepWithFields,
     renameStep,

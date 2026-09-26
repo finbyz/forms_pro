@@ -12,6 +12,27 @@ const props = defineProps<{
 
 const editFormStore = useEditForm();
 
+/**
+ * The steps this field could move to -- every step except the one it is in.
+ * Empty on a single-step form, which hides the control entirely.
+ */
+const stepOptions = computed(() => {
+    const steps = editFormStore.sections ?? [];
+    if (steps.length < 2) return [];
+
+    const currentStep = steps.findIndex((s: { fields: FormField[] }) =>
+        s.fields.includes(props.field)
+    );
+
+    return steps
+        .map((step: { label: string }, index: number) => ({ step, index }))
+        .filter(({ index }) => index !== currentStep)
+        .map(({ step, index }) => ({
+            label: step.label || `Step ${index + 1}`,
+            onClick: () => editFormStore.moveFieldToStep(props.field, index),
+        }));
+});
+
 // Eject = "Move to own row". Available whenever the row holds more than one
 // cell — that is, more than one column OR more than one stacked cell within
 // a single column. (Variable was previously named `isMultiColumn`, which
@@ -57,6 +78,7 @@ function ejectToOwnRow() {
             :isSelected="editFormStore.selectedField === props.field"
             :isDraggingAnyField="props.isDraggingAnyField"
             :canEject="canEject"
+            :stepOptions="stepOptions"
             :canMergeUp="canMergeUp"
             @remove="editFormStore.removeField(props.field)"
             @eject="ejectToOwnRow"

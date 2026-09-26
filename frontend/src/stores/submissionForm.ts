@@ -68,7 +68,17 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     nextStep,
     prevStep,
     goToStep,
-  } = useFormSteps(allFormFields);
+  } = useFormSteps(allFormFields, {
+    /**
+     * A step the author left empty is not a page a visitor should sit on --
+     * they would see a heading, no fields and a Next button. The builder still
+     * shows it, so it can be filled or deleted; only the live form skips it.
+     *
+     * The last step is always kept even when empty, because `isLastStep` is
+     * what makes the Submit button appear.
+     */
+    dropEmptySteps: true,
+  });
 
   function handleNextStep() {
     validateValues(currentStepFields.value);

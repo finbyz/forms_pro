@@ -17,6 +17,11 @@ export type GroupFieldsOptions = {
   labelFallback?: (stepNumber: number) => string;
   /** Push the trailing step even when the form has no fields (guarantees >= 1 step). */
   alwaysIncludeTrailing?: boolean;
+  /**
+   * Leave out steps that ended up with no fields. The trailing step is kept
+   * regardless, so a form always has a last step to submit from.
+   */
+  dropEmptySteps?: boolean;
 };
 
 /**
@@ -28,7 +33,11 @@ export function groupFieldsIntoSteps(
   fields: FormField[],
   options: GroupFieldsOptions = {}
 ): FormStep[] {
-  const { labelFallback = () => "", alwaysIncludeTrailing = false } = options;
+  const {
+    labelFallback = () => "",
+    alwaysIncludeTrailing = false,
+    dropEmptySteps = false,
+  } = options;
   const result: FormStep[] = [];
   let current: FormField[] = [];
   let nextLabel = "";
@@ -58,6 +67,14 @@ export function groupFieldsIntoSteps(
       label: nextLabel || labelFallback(result.length + 1),
       fields: current,
     });
+  }
+
+  if (dropEmptySteps && result.length > 1) {
+    const kept = result.filter(
+      (step, index) => step.fields.length > 0 || index === result.length - 1
+    );
+    // Everything empty: keep a single step so the form can still be submitted.
+    return kept.length ? kept : [result[result.length - 1]];
   }
 
   return result;
