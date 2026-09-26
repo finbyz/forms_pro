@@ -8,27 +8,17 @@
  * That keeps a submitted value usable anywhere Frappe already expects a
  * language, without a translation table of our own.
  *
+ * Rendered through SearchSelect, the same searchable control used for Link
+ * fields: this *is* a link to Language, and scrolling ~13 native names with no
+ * search was the odd one out.
+ *
  * Only enabled languages are offered, matching the desk.
  */
-import { computed, onMounted, ref } from "vue";
-import { Select, createResource } from "frappe-ui";
-
-type LanguageOption = { value: string; label: string };
+import { onMounted, ref } from "vue";
+import SearchSelect from "@/components/fields/SearchSelect.vue";
+import { fetchLanguages, type LanguageOption } from "@/utils/languages";
 
 const model = defineModel<string | null>();
-
-/**
- * Fallthrough attributes must not reach the <Select>.
- *
- * RenderField hands every field component `field`, `options`, `in-edit-mode`
- * and `placeholder`. Undeclared ones fall through to this component's root,
- * and Vue applies them *after* the template's own bindings -- so the parent's
- * `options` (which is `null`, because a Language field has no option string of
- * its own) replaced the language list built here. The control rendered, showed
- * its placeholder, and would not open, because a select with no options has
- * nothing to show.
- */
-defineOptions({ inheritAttrs: false });
 
 withDefaults(
     defineProps<{
@@ -42,39 +32,20 @@ withDefaults(
     { disabled: false, options: null, field: undefined, inEditMode: false, placeholder: "" }
 );
 
-/**
- * Shared across every Language field on a form — a form with a language
- * picker per step should not fetch the same list repeatedly.
- */
-let cache: Promise<LanguageOption[]> | null = null;
-
-function fetchLanguages(): Promise<LanguageOption[]> {
-  if (!cache) {
-    cache = createResource({ url: "forms_pro.api.form.get_languages" })
-      .fetch()
-      .then((data: LanguageOption[]) => data ?? [])
-      .catch(() => {
-        cache = null; // let a later mount retry rather than cache the failure
-        return [] as LanguageOption[];
-      });
-  }
-  return cache;
-}
-
 const languages = ref<LanguageOption[]>([]);
 const loading = ref(true);
 
 onMounted(async () => {
-  languages.value = await fetchLanguages();
-  loading.value = false;
+    languages.value = await fetchLanguages();
+    loading.value = false;
 });
-
-const options = computed(() => [
-  { value: "", label: loading.value ? "Loading languages…" : "Select a language" },
-  ...languages.value,
-]);
 </script>
 
 <template>
-  <Select v-model="model" :options="options" :disabled="disabled || loading" variant="outline" />
+    <SearchSelect
+        v-model="model"
+        :options="languages"
+        :disabled="disabled || loading"
+        :placeholder="loading ? 'Loading languages…' : 'Select a language'"
+    />
 </template>

@@ -3,9 +3,10 @@ import { useEditForm } from "@/stores/editForm";
 import { FormControl } from "frappe-ui";
 import { FormField } from "@/types/formfield";
 import { FIELD_TYPE_DEFINITIONS } from "@/config/fieldTypes";
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import type { Component } from "vue";
 import ConditionalLogicSection from "./ConditionalLogicSection.vue";
+import { fetchLanguages, type LanguageOption } from "@/utils/languages";
 
 const activeTab = ref("General");
 const tabs = ["General", "Validation", "Logic"];
@@ -56,6 +57,35 @@ const takesOptionList = computed(() =>
 const isLinkField = computed(
     () => String(editFormStore.selectedField?.fieldtype ?? "") === "Link"
 );
+
+/**
+ * Languages, for the default-value picker. Fetched once and shared with the
+ * Language field itself.
+ */
+const languageChoices = ref<LanguageOption[]>([]);
+onMounted(async () => {
+    languageChoices.value = await fetchLanguages();
+});
+
+/** Field types whose default must be one of a known set, not free text. */
+const defaultIsChoice = computed(() => {
+    const t = String(editFormStore.selectedField?.fieldtype ?? "");
+    return t === "Language" || OPTION_LIST_TYPES.has(t);
+});
+
+const defaultChoices = computed(() => {
+    const blank = { label: "(none)", value: "" };
+    const t = String(editFormStore.selectedField?.fieldtype ?? "");
+    if (t === "Language") return [blank, ...languageChoices.value];
+    return [
+        blank,
+        ...String(editFormStore.selectedField?.options ?? "")
+            .split("\n")
+            .map((o) => o.trim())
+            .filter(Boolean)
+            .map((o) => ({ label: o, value: o })),
+    ];
+});
 
 const fieldProperties = computed(() => {
     const hasTargetDoctype = !!editFormStore.formData?.target_doctype;
@@ -170,13 +200,29 @@ const fieldProperties = computed(() => {
             },
         },
         {
+            // Free text here was a trap: the client's "set language to German and
+            // hide it" needs the *code* ("de"), so typing "German" or picking
+            // nothing left the default empty and Frappe's own default won.
             fieldname: "default",
             component: FormControl,
+            visible: !defaultIsChoice.value,
             props: {
                 type: "text",
                 label: "Default / Pre-filled Value",
-                description: "Default value submitted with the form (e.g. 'german').",
+                description: "Submitted automatically when the visitor leaves this blank.",
                 variant: "outline",
+            },
+        },
+        {
+            fieldname: "default",
+            component: FormControl,
+            visible: defaultIsChoice.value,
+            props: {
+                type: "select",
+                label: "Default / Pre-filled Value",
+                description: "Submitted automatically when the visitor leaves this blank.",
+                variant: "outline",
+                options: defaultChoices.value,
             },
         },
         {
