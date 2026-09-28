@@ -15,11 +15,28 @@ const local = ref({
   access_mode: "Public" as "Public" | "Requires Login" | "Internal Only",
   record_strategy: "Create New" as "Create New" | "Update Existing" | "Collect Submission Only",
   create_target_fields: false,
+  naming_field: "",
   success_mode: "Designed Page" as "Designed Page" | "Redirect to External URL",
   login_required: false,
   allow_incomplete: false,
   success_redirect_url: "",
 });
+
+/**
+ * Fields whose answer could name a record. Layout rows hold no value, and a
+ * name has to be a single short value, so tables and attachments are out.
+ */
+const NOT_NAMEABLE = new Set([
+    "Heading 1", "Heading 2", "Heading 3", "Page Break",
+    "Table", "Multiselect", "Attach", "Textarea", "Text Editor",
+]);
+
+const namingFieldOptions = computed(() => [
+    { label: "Generated id (default)", value: "" },
+    ...(editFormStore.formData?.fields ?? [])
+        .filter((f: any) => f.fieldname && !NOT_NAMEABLE.has(f.fieldtype))
+        .map((f: any) => ({ label: `${f.label || f.fieldname}`, value: f.fieldname })),
+]);
 
 const accessModeOptions = [
   { label: "Public", value: "Public" },
@@ -80,6 +97,7 @@ watch(
                     : "Public",
             record_strategy: data.record_strategy ?? "Create New",
             create_target_fields: Boolean(data.create_target_fields),
+            naming_field: data.naming_field ?? "",
             success_mode: data.success_mode ?? "Designed Page",
             login_required: !!data.login_required,
             allow_incomplete: !!data.allow_incomplete,
@@ -337,6 +355,21 @@ ${scriptTag}`;
                 v-model="local.create_target_fields"
                 @change="saveSetting('create_target_fields', local.create_target_fields ? 1 : 0)"
               />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm text-ink-gray-6">Name Records By</label>
+              <FormControl
+                type="select"
+                variant="subtle"
+                size="sm"
+                :options="namingFieldOptions"
+                v-model="local.naming_field"
+                @update:modelValue="(v: string) => saveSetting('naming_field', v)"
+              />
+              <p class="text-xs text-ink-gray-5">
+                Each record is named after this answer, so the list reads properly instead
+                of showing generated ids. Leave as generated to keep system ids.
+              </p>
             </div>
             <div class="flex flex-col gap-2">
               <label class="text-sm text-ink-gray-6">Success Mode</label>

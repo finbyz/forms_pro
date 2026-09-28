@@ -27,6 +27,7 @@
   "status",
   "access_mode",
   "record_strategy",
+  "naming_field",
   "create_target_fields",
   "success_mode",
   "success_schema_json",
@@ -161,6 +162,12 @@
    "default": "Create New"
   },
   {
+   "fieldname": "naming_field",
+   "fieldtype": "Data",
+   "label": "Name Records By",
+   "description": "Fieldname whose answer names each record, e.g. email. Leave blank to let the system generate an id."
+  },
+  {
    "fieldname": "create_target_fields",
    "fieldtype": "Check",
    "label": "Create Missing Fields on Target DocType",
@@ -212,7 +219,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-25 12:00:00.000000",
+ "modified": "2026-09-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Forms Pro",
  "name": "Form",
