@@ -257,6 +257,16 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     return digits.length >= 6 && digits.length <= 15;
   }
 
+  /** Accepts anything the browser can navigate to; the server re-checks. */
+  function isPlausibleUrl(value: string): boolean {
+    try {
+      const url = new URL(value.includes("://") ? value : `https://${value}`);
+      return !!url.hostname && url.hostname.includes(".");
+    } catch {
+      return false;
+    }
+  }
+
   function formatError(field: FormField, value: any): string | null {
     if (value === undefined || value === null || value === "") return null;
 
@@ -266,6 +276,10 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
 
     if (field.fieldtype === "Phone" && !isPlausiblePhone(String(value))) {
       return `${field.label} must be a valid phone number`;
+    }
+
+    if (field.fieldtype === "URL" && !isPlausibleUrl(String(value))) {
+      return `${field.label} must be a valid URL (for example https://example.com)`;
     }
 
     if (field.fieldtype === "Number" && Number.isNaN(Number(value))) {

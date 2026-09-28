@@ -16,6 +16,9 @@ FORM_TO_FRAPPE_FIELDTYPE: dict[str, dict] = {
     "Data": {"fieldtype": "Data"},
     "Number": {"fieldtype": "Int"},
     "Email": {"fieldtype": "Data", "options": "Email"},
+    # Frappe marks a URL column the same way it marks an email one:
+    # a Data field whose `options` names the semantic.
+    "URL": {"fieldtype": "Data", "options": "URL"},
     "Date": {"fieldtype": "Date"},
     "Date Time": {"fieldtype": "Datetime"},
     "Date Range": {"fieldtype": "Data"},
@@ -82,6 +85,7 @@ class FormField(Document):
             "Table",
             "Multiselect",
             "Language",
+            "URL",
             "Heading 1",
             "Heading 2",
             "Heading 3",

@@ -93,14 +93,18 @@ class Form(Document):
         Mirror the form's fields onto the DocType the form owns, so submissions
         land in real columns instead of an empty record.
 
-        Only additive: columns for removed fields are left alone rather than
-        dropping data that has already been collected.
+        A column whose field has been removed from the form is hidden, not
+        dropped: the submissions already collected into it must survive, but
+        leaving it visible meant the DocType still listed fields the form no
+        longer has, which is confusing when checking a record in the desk.
+        Re-adding the field to the form brings its column back into view.
         """
         from forms_pro.forms_pro.doctype.form_field.form_field import _DISPLAY_ONLY_FIELDTYPES
 
         doctype_doc = frappe.get_doc("DocType", self.target_doctype)
         existing = {f.fieldname: f for f in doctype_doc.fields}
         changed = False
+        wanted_fieldnames: set[str] = set()
 
         # Link/Table columns are invalid without a target DocType, and Frappe
         # rejects the whole DocType save with DoctypeLinkError. A freshly added
@@ -126,12 +130,36 @@ class Form(Document):
                     if prop in wanted and current.get(prop) != wanted[prop]:
                         current.set(prop, wanted[prop])
                         changed = True
+                # Back on the form, so visible again on the DocType.
+                if current.get("hidden"):
+                    current.set("hidden", 0)
+                    changed = True
+
+            wanted_fieldnames.add(field.fieldname)
 
             # A field on a form-owned DocType is always bound to its own column.
             if field.source_type != "Target Field" or field.target_field != field.fieldname:
                 field.db_set("source_type", "Target Field", update_modified=False)
                 field.db_set("target_field", field.fieldname, update_modified=False)
                 field.db_set("mapping_type", "Direct", update_modified=False)
+
+        # Columns whose field is no longer on the form: hide rather than drop,
+        # so submitted values survive but the DocType stops advertising fields
+        # the form does not have. Layout rows and Forms Pro's own tracking
+        # columns are not ours to touch.
+        from forms_pro.utils.constants import FORMS_PRO_SYSTEM_FIELDNAMES
+
+        LAYOUT = ("Section Break", "Column Break", "Tab Break", "HTML")
+        for df in doctype_doc.fields:
+            if df.fieldname in wanted_fieldnames:
+                continue
+            if df.fieldname in FORMS_PRO_SYSTEM_FIELDNAMES or df.fieldtype in LAYOUT:
+                continue
+            if not df.hidden:
+                df.set("hidden", 1)
+                # A hidden column that is still mandatory blocks every save.
+                df.set("reqd", 0)
+                changed = True
 
         if changed:
             doctype_doc.save(ignore_permissions=True)

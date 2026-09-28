@@ -19,6 +19,7 @@ export enum Fieldtype {
   "TABLE" = "Table",
   "MULTISELECT" = "Multiselect",
   "LANGUAGE" = "Language",
+  "URL" = "URL",
   "HEADING_1" = "Heading 1",
   "HEADING_2" = "Heading 2",
   "HEADING_3" = "Heading 3",

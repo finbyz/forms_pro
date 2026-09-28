@@ -21,6 +21,7 @@ export const mapDoctypeFieldForForm = (
     const semantic = options.trim().toLowerCase();
     if (semantic === "email") return Fieldtype.EMAIL;
     if (semantic === "phone") return Fieldtype.PHONE;
+    if (semantic === "url") return Fieldtype.URL;
   }
 
   const FRAPPE_TO_FORM_TYPE: Partial<Record<string, Fieldtype>> = {

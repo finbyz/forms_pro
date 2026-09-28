@@ -46,6 +46,7 @@ import {
   KeyRound,
   Languages,
   Link2,
+  Link as LinkIcon,
   List,
   ListChecks,
   Paperclip,
@@ -239,6 +240,18 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
     props: {},
     layout: "default",
     frappeFieldtype: "Link",
+    isBoolean: false,
+    isDate: false,
+  },
+  {
+    // Frappe stores a URL as Data with options "URL"; the browser gives us
+    // keyboard and validation affordances for free with type="url".
+    name: Fieldtype.URL,
+    component: FormControl,
+    icon: LinkIcon,
+    props: { type: "url", variant: "outline" },
+    layout: "default",
+    frappeFieldtype: "Data",
     isBoolean: false,
     isDate: false,
   },

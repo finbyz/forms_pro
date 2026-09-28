@@ -16,6 +16,7 @@ const CATEGORISED: string[] = [
   Fieldtype.NUMBER,
   Fieldtype.EMAIL,
   Fieldtype.PHONE,
+  Fieldtype.URL,
   Fieldtype.TEXTAREA,
   Fieldtype.TEXT_EDITOR,
   Fieldtype.SELECT,

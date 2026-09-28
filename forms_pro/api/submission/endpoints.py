@@ -2,6 +2,8 @@ import json
 import re
 from typing import Any
 
+from urllib.parse import urlparse
+
 import frappe
 from frappe import _
 from forms_pro.services.submissions.processor import SubmissionProcessor
@@ -79,6 +81,14 @@ def _format_error(field, value) -> str | None:
         digits = re.sub(r"\D", "", text)
         if not (6 <= len(digits) <= 15):
             return _("{0} must be a valid phone number").format(field.label)
+
+    if field.fieldtype == "URL":
+        # Permissive on the scheme -- people type "example.com" -- but the host
+        # has to look like a host. The client checks the same shape.
+        candidate = text if "://" in text else f"https://{text}"
+        parsed = urlparse(candidate)
+        if not parsed.netloc or "." not in parsed.netloc:
+            return _("{0} must be a valid URL").format(field.label)
 
     if field.fieldtype == "Number":
         try:
