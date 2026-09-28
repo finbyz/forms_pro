@@ -29,7 +29,7 @@ export const mapDoctypeFieldForForm = (
     Attach: Fieldtype.ATTACH,
     "Attach Image": Fieldtype.ATTACH,
     Check: Fieldtype.CHECKBOX,
-    Currency: Fieldtype.NUMBER,
+    Currency: Fieldtype.CURRENCY,
     Data: Fieldtype.DATA,
     Date: Fieldtype.DATE,
     Datetime: Fieldtype.DATE_TIME,

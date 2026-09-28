@@ -278,6 +278,15 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
       return `${field.label} must be a valid phone number`;
     }
 
+    const limit = Number((field as any).max_length ?? 0);
+    if (limit > 0 && String(value).length > limit) {
+      return `${field.label} must be ${limit} characters or fewer`;
+    }
+
+    if (field.fieldtype === "Currency" && Number.isNaN(Number(String(value).replace(/,/g, "")))) {
+      return `${field.label} must be an amount`;
+    }
+
     if (field.fieldtype === "URL" && !isPlausibleUrl(String(value))) {
       return `${field.label} must be a valid URL (for example https://example.com)`;
     }

@@ -15,6 +15,7 @@ FORM_TO_FRAPPE_FIELDTYPE: dict[str, dict] = {
     "Attach": {"fieldtype": "Attach"},
     "Data": {"fieldtype": "Data"},
     "Number": {"fieldtype": "Int"},
+    "Currency": {"fieldtype": "Currency"},
     "Email": {"fieldtype": "Data", "options": "Email"},
     # Frappe marks a URL column the same way it marks an email one:
     # a Data field whose `options` names the semantic.
@@ -86,6 +87,7 @@ class FormField(Document):
             "Multiselect",
             "Language",
             "URL",
+            "Currency",
             "Heading 1",
             "Heading 2",
             "Heading 3",
@@ -99,6 +101,7 @@ class FormField(Document):
         parentfield: DF.Data
         parenttype: DF.Data
         reqd: DF.Check
+        max_length: DF.Int
         row_index: DF.Int
     # end: auto-generated types
 
@@ -124,6 +127,8 @@ class FormField(Document):
             "options": mapping.get("options", self.get_options()),
             "description": self.description,
             "default": self.default,
+            # Frappe calls it `length`; 0 means "framework default".
+            "length": self.max_length or 0,
         }
 
     def get_options(self) -> str | None:

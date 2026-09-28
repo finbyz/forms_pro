@@ -46,6 +46,7 @@ const getComponent = computed(() => {
         :in-edit-mode="props.inEditMode"
         :disabled="props.disabled"
         :placeholder="props.field.placeholder || undefined"
+        :maxlength="props.field.max_length ? Number(props.field.max_length) : undefined"
         v-bind="getComponent.props"
     />
 </template>

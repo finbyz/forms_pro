@@ -51,6 +51,7 @@ class FormCompiler:
         "options",
         "default",
         "placeholder",
+        "max_length",
         "description",
         "conditional_logic",
         "row_index",

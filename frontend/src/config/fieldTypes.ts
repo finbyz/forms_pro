@@ -35,6 +35,7 @@ import {
 import {
   AlignLeft,
   AtSign,
+  Banknote,
   Calendar,
   CalendarClock,
   CalendarRange,

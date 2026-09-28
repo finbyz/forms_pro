@@ -14,6 +14,7 @@ import { Fieldtype } from "@/types/FormsPro/form_field.types";
 const CATEGORISED: string[] = [
   Fieldtype.DATA,
   Fieldtype.NUMBER,
+  Fieldtype.CURRENCY,
   Fieldtype.EMAIL,
   Fieldtype.PHONE,
   Fieldtype.URL,

@@ -151,6 +151,17 @@ const fieldProperties = computed(() => {
             },
         },
         {
+            fieldname: "max_length",
+            component: FormControl,
+            props: {
+                type: "number",
+                label: "Max Characters",
+                description: "Longest answer allowed. 0 for no limit.",
+                variant: "outline",
+                min: 0,
+            },
+        },
+        {
             fieldname: "read_only",
             component: FormControl,
             props: {
@@ -285,7 +296,7 @@ const fieldProperties = computed(() => {
 const groupedProperties = computed(() => {
     return {
         General: fieldProperties.value.filter(p => ["label", "fieldname", "placeholder", "fieldtype", "description"].includes(p.fieldname)),
-        Validation: fieldProperties.value.filter(p => ["reqd", "hidden", "read_only", "default", "options"].includes(p.fieldname)),
+        Validation: fieldProperties.value.filter(p => ["reqd", "hidden", "read_only", "max_length", "default", "options"].includes(p.fieldname)),
         Logic: fieldProperties.value.filter(p => ["target_field", "source_type", "mapping_type", "conditional_logic", "field_key"].includes(p.fieldname)),
     };
 });

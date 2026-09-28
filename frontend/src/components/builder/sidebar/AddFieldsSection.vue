@@ -19,6 +19,7 @@ const CATEGORIES: { label: string; fieldNames: Fieldtype[] }[] = [
         fieldNames: [
             Fieldtype.DATA,
             Fieldtype.NUMBER,
+            Fieldtype.CURRENCY,
             Fieldtype.EMAIL,
             Fieldtype.PHONE,
             Fieldtype.URL,

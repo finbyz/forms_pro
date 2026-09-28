@@ -82,6 +82,16 @@ def _format_error(field, value) -> str | None:
         if not (6 <= len(digits) <= 15):
             return _("{0} must be a valid phone number").format(field.label)
 
+    limit = int(getattr(field, "max_length", 0) or 0)
+    if limit and len(text) > limit:
+        return _("{0} must be {1} characters or fewer").format(field.label, limit)
+
+    if field.fieldtype == "Currency":
+        try:
+            float(text.replace(",", ""))
+        except (TypeError, ValueError):
+            return _("{0} must be an amount").format(field.label)
+
     if field.fieldtype == "URL":
         # Permissive on the scheme -- people type "example.com" -- but the host
         # has to look like a host. The client checks the same shape.
