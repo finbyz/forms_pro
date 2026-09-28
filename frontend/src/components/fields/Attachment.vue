@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ErrorMessage, FileUploader } from "frappe-ui";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 defineProps({
     field: {
@@ -11,7 +11,16 @@ defineProps({
 
 const value = defineModel<string>();
 
-const inPreview = ref(false);
+/**
+ * Whether a file is attached is read from the model, never from local state.
+ *
+ * Moving between steps unmounts this component -- FormRenderer only renders the
+ * current step -- so anything held in a local ref is gone on the way back. The
+ * uploaded URL survives in the form data, but the preview used to be gated on a
+ * local flag, so returning to the step showed an empty Upload button and people
+ * re-uploaded a file that was already attached.
+ */
+const hasFile = computed(() => !!value.value);
 
 export type FileType = {
     content_hash: string;
@@ -50,8 +59,23 @@ const handleChange = (file: FileType) => {
     if (file.file_url) {
         value.value = file.file_url;
     }
-    inPreview.value = true;
 };
+
+/**
+ * After a remount only the URL is left, so fall back to the name inside it.
+ * The size is not recoverable and is simply not shown.
+ */
+const displayName = computed(() => {
+    if (fileData.value?.file_name) return fileData.value.file_name;
+    const url = value.value ?? "";
+    try {
+        return decodeURIComponent(url.split("/").pop() || url);
+    } catch {
+        return url.split("/").pop() || url;
+    }
+});
+
+const displaySize = computed(() => fileData.value?.file_size ?? null);
 
 // Guests can only upload when System Settings allows it, and the allowlist
 // there is keyed on this doctype — so tag the upload rather than leaving guest
@@ -65,13 +89,12 @@ const uploadArgs = {
 const handleRemove = () => {
     fileData.value = null;
     value.value = "";
-    inPreview.value = false;
 };
 </script>
 <template>
     <div class="flex gap-2 flex-col mt-2">
         <FileUploader
-            v-if="!inPreview"
+            v-if="!hasFile"
             :upload-args="uploadArgs"
             @success="(file: FileType) => handleChange(file)"
         >
@@ -83,12 +106,12 @@ const handleRemove = () => {
                 <ErrorMessage :message="error" />
             </template>
         </FileUploader>
-        <div v-if="inPreview" class="p-4 bg-white border rounded-md flex flex-col gap-2">
-            <a :href="fileData?.file_url" target="_blank" class="text-sm font-medium">
-                {{ fileData?.file_name }}
+        <div v-if="hasFile" class="p-4 bg-white border rounded-md flex flex-col gap-2">
+            <a :href="value" target="_blank" class="text-sm font-medium">
+                {{ displayName }}
             </a>
-            <span class="text-sm text-gray-500">
-                {{ formatFileSize(fileData?.file_size || 0) }}
+            <span v-if="displaySize !== null" class="text-sm text-gray-500">
+                {{ formatFileSize(displaySize) }}
             </span>
             <Button
                 theme="red"
