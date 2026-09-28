@@ -77,33 +77,31 @@
 // Forms Pro: read back a password a visitor submitted.
 //
 // Frappe encrypts a Password field and sends the desk `***`; its own eye icon
-// only unmasks what is being typed, so a submitted answer could not be read at
-// all. This adds a reveal button per password field on records a form created.
-// The value is fetched on demand and never rendered until asked for.
+// only unmasks what is being typed, so a submitted answer cannot be read at
+// all. This adds a toolbar action per password field.
+//
+// The button goes on the toolbar rather than inside the field: Frappe re-renders
+// a control's wrapper whenever the form refreshes, which silently removed a
+// button appended there. It is offered for any saved record with a Password
+// field -- the endpoint checks read permission, so gating the UI as well only
+// hid it from people who were entitled to it.
 (function () {
-    if (typeof frappe === "undefined" || typeof $ === "undefined") return;
+    if (typeof frappe === "undefined") return;
 
     $(document).on("form-refresh", function (e, frm) {
         if (!frm || !frm.doc || frm.is_new()) return;
-        if (!frm.doc.fp_linked_form) return;
 
-        (frm.meta.fields || [])
-            .filter(function (df) {
-                return df.fieldtype === "Password";
-            })
-            .forEach(function (df) {
-                const field = frm.get_field(df.fieldname);
-                if (!field || !field.$wrapper || field.$wrapper.data("fp-reveal")) return;
-                field.$wrapper.data("fp-reveal", true);
+        var passwordFields = (frm.meta.fields || []).filter(function (df) {
+            return df.fieldtype === "Password";
+        });
+        if (!passwordFields.length) return;
 
-                const button = $(
-                    '<button type="button" class="btn btn-xs btn-default mt-1">' +
-                        __("Reveal submitted value") +
-                        "</button>"
-                );
+        passwordFields.forEach(function (df) {
+            var label = __("Show {0}", [df.label || df.fieldname]);
 
-                button.on("click", function () {
-                    button.prop("disabled", true).text(__("Revealing…"));
+            frm.add_custom_button(
+                label,
+                function () {
                     frappe.call({
                         method: "forms_pro.api.submission.reveal_password_field",
                         args: {
@@ -111,22 +109,33 @@
                             docname: frm.doc.name,
                             fieldname: df.fieldname,
                         },
+                        freeze: true,
+                        freeze_message: __("Decrypting…"),
                         callback: function (r) {
-                            const value = (r && r.message) || "";
-                            button.remove();
-                            field.$wrapper.append(
-                                $("<div class='text-muted small mt-1'></div>").text(
-                                    value || __("No value was submitted.")
-                                )
-                            );
-                        },
-                        error: function () {
-                            button.prop("disabled", false).text(__("Reveal submitted value"));
+                            var value = (r && r.message) || "";
+                            if (!value) {
+                                frappe.msgprint({
+                                    title: df.label || df.fieldname,
+                                    message: __("No value was submitted."),
+                                });
+                                return;
+                            }
+                            frappe.msgprint({
+                                title: df.label || df.fieldname,
+                                message:
+                                    "<p>" +
+                                    __("Submitted value:") +
+                                    "</p><pre style='user-select:all'>" +
+                                    frappe.utils.escape_html(value) +
+                                    "</pre><p class='text-muted small'>" +
+                                    __("This reveal has been recorded in the Access Log.") +
+                                    "</p>",
+                            });
                         },
                     });
-                });
-
-                field.$wrapper.append(button);
-            });
+                },
+                __("Passwords")
+            );
+        });
     });
 })();

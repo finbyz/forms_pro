@@ -25,7 +25,11 @@ add_to_apps_screen = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/forms_pro/css/forms_pro.css"
-app_include_js = "/assets/forms_pro/js/forms_pro_desk.js"
+# Bundled, not a raw asset path: a plain /assets/... file is served with a
+# one-year cache and no version in its URL, so desk changes never reached
+# browsers -- or the CDN in front of them. `bench build` emits a
+# content-hashed filename, which changes whenever the file does.
+app_include_js = "forms_pro_desk.bundle.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/forms_pro/css/forms_pro.css"
