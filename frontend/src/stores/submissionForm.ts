@@ -48,6 +48,15 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
 
   const errors = ref<string[]>([]);
   const inSuccessState = ref<boolean>(false);
+  /**
+   * Set when the form behind this URL could not be loaded.
+   *
+   * The page decided it was still loading whenever `formIsPublished` was null,
+   * and a failed lookup leaves it null forever -- so a mistyped or deleted
+   * route sat on the spinner indefinitely instead of saying the form is not
+   * there.
+   */
+  const loadFailed = ref(false);
   /** Id of the submission just created, for the embed's analytics event. */
   const lastSubmissionId = ref<string | null>(null);
   const inFormFillingState = ref<boolean>(true);
@@ -105,6 +114,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
 
   async function initialize(route: string) {
     currentFormRoute.value = route;
+    loadFailed.value = false;
     formResource.value = createResource({
       url: "forms_pro.api.form.get_form_by_route",
       params: {
@@ -127,6 +137,11 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
 
         // Fetch Google's script now so the first submit isn't waiting on it.
         warmRecaptcha(data.captcha_site_key);
+      },
+      onError() {
+        // Covers both "no form with this route" and a form whose record is
+        // gone; either way there is nothing to show the visitor.
+        loadFailed.value = true;
       },
     });
 
@@ -300,6 +315,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     allowIncompleteForms,
     errors,
     inSuccessState,
+    loadFailed,
     lastSubmissionId,
     inFormFillingState,
     formIsPublished,

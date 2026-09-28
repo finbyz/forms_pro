@@ -3,6 +3,7 @@ import { useRoute } from "vue-router";
 import { useSubmissionForm } from "@/stores/submissionForm";
 import FormHeader from "@/components/submission/FormHeader.vue";
 import FormRenderer from "@/components/submission/FormRenderer.vue";
+import FormNotFoundState from "@/components/submission/FormNotFoundState.vue";
 import StepIndicator from "@/components/submission/StepIndicator.vue";
 import { LoadingIndicator } from "frappe-ui";
 import PageHeader from "@/components/submission/PageHeader.vue";
@@ -73,9 +74,15 @@ watch(() => submissionFormStore.inSuccessState, (isSuccess) => {
     <div ref="themeRoot" class="p-8 bg-surface-gray-1 min-h-svh space-y-16">
         <PageHeader />
 
+        <!-- No such form: checked first, or a failed lookup reads as "still loading" -->
+        <FormNotFoundState
+            v-if="submissionFormStore.loadFailed"
+            class="form-container-simple py-24"
+        />
+
         <!-- Loading State: shown while form metadata is being retrieved -->
         <div
-            v-if="submissionFormStore.isLoading || submissionFormStore.formIsPublished === null"
+            v-else-if="submissionFormStore.isLoading || submissionFormStore.formIsPublished === null"
             class="form-container-simple flex items-center justify-center py-24 min-h-[300px]"
         >
             <LoadingIndicator class="w-8 h-8 text-ink-gray-4" />
