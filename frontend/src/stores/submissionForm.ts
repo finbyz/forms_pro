@@ -48,6 +48,8 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
 
   const errors = ref<string[]>([]);
   const inSuccessState = ref<boolean>(false);
+  /** Id of the submission just created, for the embed's analytics event. */
+  const lastSubmissionId = ref<string | null>(null);
   const inFormFillingState = ref<boolean>(true);
 
   const fields = ref<Record<string, any>>({});
@@ -203,8 +205,11 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
           captcha_token: captchaToken,
         };
       },
-      onSuccess() {
+      onSuccess(data: any) {
         clearDraft();
+        // The endpoint returns the new submission's id; the embed host needs it
+        // to tie a dataLayer event back to the record.
+        lastSubmissionId.value = typeof data === "string" ? data : (data?.submission_id ?? null);
         if (is_draft) {
           toast.info("Draft saved successfully");
           inFormFillingState.value = true;
@@ -295,6 +300,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     allowIncompleteForms,
     errors,
     inSuccessState,
+    lastSubmissionId,
     inFormFillingState,
     formIsPublished,
     initialize,

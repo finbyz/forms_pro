@@ -188,7 +188,9 @@ function copyLink() {
 function copyEmbed() {
     const link = `${window.location.origin}/forms/p/${local.value.route}`;
     // Avoid Vue compiler parsing script tags in template literal
-    const scriptTag = "<" + "script async src=\"" + window.location.origin + "/api/method/forms_pro.api.v1.public.embed.get_embed_script\" data-route=\"" + local.value.route + "\" data-base=\"" + window.location.origin + "\"><" + "/script>";
+    // Not `async`: the loader identifies itself from the running tag, and an
+    // async tag can execute out of order. Same snippet as the Share panel.
+    const scriptTag = "<" + "script src=\"" + window.location.origin + "/api/method/forms_pro.api.v1.public.get_embed_script\" data-route=\"" + local.value.route + "\" data-base=\"" + window.location.origin + "\"><" + "/script>";
     const code = `<div data-forms-pro="${local.value.route}"></div>
 ${scriptTag}`;
     navigator.clipboard.writeText(code);

@@ -2,43 +2,77 @@
 from __future__ import annotations
 
 import frappe
+from werkzeug.wrappers import Response
 
 
 EMBED_JS = """(function() {
+  // `currentScript` is the tag actually running. The old fallback of "the last
+  // script on the page" is only correct for a synchronous tag -- with `async`
+  // this script may not be last when it executes, and it would then read
+  // another tag's attributes and never find its container.
   var scripts = document.getElementsByTagName('script');
-  var me = scripts[scripts.length - 1];
-  var container = document.querySelector('[data-forms-pro="' + me.getAttribute('data-route') + '"]');
+  var me = document.currentScript || scripts[scripts.length - 1];
+  if (!me) return;
+  var route = me.getAttribute('data-route');
+  if (!route) return;
+  var container = document.querySelector('[data-forms-pro="' + route + '"]');
   if (!container) return;
 
+  // Size comes from the snippet when given. Width and height used to be
+  // hard-coded here, so editing them in the embed code changed nothing.
+  var width = me.getAttribute('data-width') || '100%';
+  var height = me.getAttribute('data-height') || '';
+
   var iframe = document.createElement('iframe');
-  iframe.src = me.getAttribute('data-base') + '/forms/p/' + me.getAttribute('data-route') + '?embed=1';
-  iframe.style.width = '100%';
+  iframe.src = me.getAttribute('data-base') + '/forms/p/' + route + '?embed=1';
+  iframe.style.width = width;
   iframe.style.border = 'none';
   iframe.style.overflow = 'hidden';
   iframe.setAttribute('scrolling', 'no');
+  if (height) {
+    iframe.style.height = height;
+  }
   container.appendChild(iframe);
 
-  iframe.onload = function() {
-    window.addEventListener('message', function(e) {
-      if (e.data && e.data.source === 'forms-pro') {
-        if (e.data.event === 'formspro:resize') {
-          iframe.style.height = e.data.height + 'px';
-        }
-        if (e.data.event === 'formspro:submitted') {
-          window.dispatchEvent(new CustomEvent('forms-pro-submitted', { detail: e.data }));
-          if (window.dataLayer) {
-            window.dataLayer.push({ event: 'formspro_form_submit', form_name: e.data.form, submission_id: e.data.submission_id });
-          }
-        }
-      }
-    });
-  };
+  // Registered before the iframe can send anything. Waiting for `onload` meant
+  // an early resize or submit message arrived with nobody listening.
+  window.addEventListener('message', function(e) {
+    if (e.source !== iframe.contentWindow) return;
+    if (!e.data || e.data.source !== 'forms-pro') return;
+
+    // An explicit height in the snippet wins; otherwise grow to fit.
+    if (e.data.event === 'formspro:resize' && !height) {
+      iframe.style.height = e.data.height + 'px';
+    }
+
+    if (e.data.event === 'formspro:submitted') {
+      window.dispatchEvent(new CustomEvent('forms-pro-submitted', { detail: e.data }));
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: 'formspro_form_submit',
+        form_name: e.data.form,
+        form_route: e.data.route,
+        submission_id: e.data.submission_id
+      });
+    }
+  });
 })();"""
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
 def get_embed_script():
-    """Serve the embed JavaScript."""
-    frappe.response.type = "javascript"
-    frappe.response.headers["Cache-Control"] = "public, max-age=3600"
-    return EMBED_JS
+    """
+    Serve the embed loader as JavaScript.
+
+    Returns a Response directly. Two earlier attempts did not work: setting
+    `frappe.response["type"] = "javascript"` is not a type Frappe knows, so
+    building the response raised a KeyError and the endpoint answered 500; and
+    the "download" type still came back as `application/json`, which a browser
+    refuses to run as a script. The API layer hands a Response object straight
+    through, so the content type is ours to set.
+    """
+    return Response(
+        EMBED_JS,
+        mimetype="application/javascript",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )

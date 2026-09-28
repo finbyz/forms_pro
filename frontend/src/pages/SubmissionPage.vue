@@ -25,13 +25,27 @@ watch(
 );
 
 
+/**
+ * Messages to the embedding page.
+ *
+ * The host loader only acts on messages carrying `source: "forms-pro"` and
+ * reads the name off `event`. This page was sending neither -- no `source` at
+ * all, and `type` instead of `event` -- so every message was ignored: the
+ * iframe never auto-resized and the `formspro_form_submit` dataLayer event was
+ * never pushed, which is why it could not be found in GTM.
+ */
+function postToHost(event: string, data: Record<string, unknown> = {}) {
+    if (window === window.parent) return;
+    window.parent.postMessage({ source: "forms-pro", event, ...data }, "*");
+}
+
 // Embed integration: Resize observer
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
     if (window !== window.parent) {
         resizeObserver = new ResizeObserver((entries) => {
             const height = entries[0].target.scrollHeight;
-            window.parent.postMessage({ type: "formspro:resize", height }, "*");
+            postToHost("formspro:resize", { height });
         });
         resizeObserver.observe(document.body);
     }
@@ -45,12 +59,13 @@ onUnmounted(() => {
 
 // Embed integration: Submission success event
 watch(() => submissionFormStore.inSuccessState, (isSuccess) => {
-    if (isSuccess && window !== window.parent) {
-        window.parent.postMessage({ 
-            type: "formspro:submitted", 
-            payload: { route: route.params.route } 
-        }, "*");
-    }
+    if (!isSuccess) return;
+    postToHost("formspro:submitted", {
+        // Field names the host loader reads when pushing to the dataLayer.
+        form: submissionFormStore.formResource?.data?.title ?? route.params.route,
+        submission_id: submissionFormStore.lastSubmissionId,
+        route: route.params.route,
+    });
 });
 
 </script>

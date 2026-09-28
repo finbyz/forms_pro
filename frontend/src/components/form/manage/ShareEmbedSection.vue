@@ -22,11 +22,47 @@ const fullPublicUrl = computed(() => {
     return `${window.location.origin}/forms/p/${route}`;
 });
 
+/**
+ * The embed snippet.
+ *
+ * Two things were wrong with the plain <iframe> this used to emit. Its inline
+ * style hard-coded `width: 100%`, which overrides the width attribute, so the
+ * Width control did nothing. And a bare iframe cannot talk to the host page, so
+ * the `formspro_form_submit` dataLayer event Google Tag Manager needs was never
+ * pushed -- there was nothing to push it.
+ *
+ * The loader script fixes both: it applies the chosen size, and it forwards the
+ * submission to the host as a dataLayer event and a `forms-pro-submitted`
+ * DOM event. Leaving Height blank lets the form grow to fit its content.
+ */
 const embedCode = computed(() => {
-    if (!fullPublicUrl.value) return "<!-- Form URL not available -->";
-    const borderStyle = embedBorder.value ? "border: 1px solid #e2e8f0; border-radius: 8px;" : "border: none;";
-    return `<iframe\n  src="${fullPublicUrl.value}"\n  width="${embedWidth.value}"\n  height="${embedHeight.value}px"\n  frameborder="0"\n  style="${borderStyle} width: 100%; min-height: ${embedHeight.value}px;"\n  allow="camera; microphone; autoplay; encrypted-media; fullscreen"\n></iframe>`;
+    const route = formData.value?.route;
+    if (!route) return "<!-- Form URL not available -->";
+
+    const origin = window.location.origin;
+    const src = `${origin}/api/method/forms_pro.api.v1.public.get_embed_script`;
+    const height = embedHeight.value?.trim();
+    const width = embedWidth.value?.trim() || "100%";
+    const borderStyle = embedBorder.value
+        ? ' style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;"'
+        : "";
+
+    return [
+        `<div data-forms-pro="${route}"${borderStyle}></div>`,
+        `<script`,
+        `  src="${src}"`,
+        `  data-route="${route}"`,
+        `  data-base="${origin}"`,
+        `  data-width="${withUnit(width)}"`,
+        height ? `  data-height="${withUnit(height)}"` : "  <!-- height omitted: grows to fit -->",
+        `><\/script>`,
+    ].join("\n");
 });
+
+/** "650" means pixels; "100%" or "40rem" are already sized. */
+function withUnit(value: string): string {
+    return /^\d+$/.test(value) ? `${value}px` : value;
+}
 
 const qrCodeUrl = computed(() => {
     if (!fullPublicUrl.value) return "";
