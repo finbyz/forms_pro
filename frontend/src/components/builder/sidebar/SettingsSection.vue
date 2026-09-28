@@ -121,7 +121,7 @@ const inExpandedDescription = ref(false);
                         :bubble-menu="true"
                         :starterkit-options="{
                             heading: {
-                                levels: [2, 3, 4, 5, 6],
+                                levels: [1, 2, 3, 4, 5, 6],
                             },
                         }"
                     />
@@ -159,7 +159,7 @@ const inExpandedDescription = ref(false);
                                 :fixed-menu="true"
                                 :starterkit-options="{
                                     heading: {
-                                        levels: [2, 3, 4, 5, 6],
+                                        levels: [1, 2, 3, 4, 5, 6],
                                     },
                                 }"
                             />

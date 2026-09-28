@@ -209,21 +209,24 @@ class SubmissionProcessor:
             target = field.target_field
             if not target and target_meta.has_field(field.fieldname):
                 target = field.fieldname
-            if not (target and field.mapping_type):
+            if not target:
                 continue
 
-            if field.mapping_type == "Constant":
+            mapping_type = field.mapping_type or "Direct"
+
+            if mapping_type == "Constant":
                 mapped[target] = field.default
-            elif field.mapping_type == "Direct":
+            elif mapping_type == "Direct":
                 # Hidden and read-only fields are both set by whoever built the
                 # form, never by the visitor, so the payload is ignored for them.
                 if field.hidden or getattr(field, "read_only", 0):
                     if field.default not in (None, ""):
                         mapped[target] = field.default
                 else:
-                    mapped[target] = self.form_data.get(
-                        field.fieldname
-                    ) or self.form_data.get(field.field_key)
+                    val = self.form_data.get(field.fieldname)
+                    if val is None and getattr(field, "field_key", None):
+                        val = self.form_data.get(field.field_key)
+                    mapped[target] = val
         return mapped
 
     def _mark_success(self, submission_name: str, mapped_data: dict[str, Any]) -> None:

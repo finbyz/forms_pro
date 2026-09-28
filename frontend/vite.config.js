@@ -37,7 +37,7 @@ export default defineConfig({
             // the barrel would pull ProseMirror into the eager graph.
             "frappe-ui-text-editor": path.resolve(
                 __dirname,
-                "node_modules/frappe-ui/src/components/TextEditor/TextEditor.vue"
+                "src/components/fields/TextEditor.vue"
             ),
             "tailwind.config.js": path.resolve(__dirname, "tailwind.config.js"),
         },

@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, ref } from "vue";
 import { LoadingIndicator } from "frappe-ui";
 
 // Same reason as the field registry: keep ProseMirror out of the eager graph.
-const TextEditor = defineAsyncComponent(() => import("frappe-ui-text-editor"));
+const TextEditor = defineAsyncComponent(() => import("@/components/fields/TextEditor.vue"));
 import { onClickOutside, useEventListener } from "@vueuse/core";
 import draggableComponent from "vuedraggable";
 
@@ -235,9 +235,11 @@ onClickOutside(fieldContentRef, (event) => {
                                 @change="(value: string) => (editFormStore.formData.description = value)"
                                 :starterkit-options="{
                                     heading: {
-                                        levels: [2, 3, 4, 5, 6],
+                                        levels: [1, 2, 3, 4, 5, 6],
                                     },
                                 }"
+                                :fixed-menu="true"
+                                :bubble-menu="false"
                             />
                         </div>
                         <hr class="border-outline-gray-1 -mx-8 mb-8" />

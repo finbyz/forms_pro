@@ -2,9 +2,8 @@ import { createResource } from "frappe-ui";
 import { toast } from "vue-sonner";
 import { getRecaptchaToken, warmRecaptcha } from "@/utils/recaptcha";
 import { defineStore } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { FormField } from "@/types/formfield";
-import { useStorage } from "@vueuse/core";
 import {
   shouldFieldBeRequired,
   shouldFieldBeVisible,
@@ -124,6 +123,30 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
   }
 
 
+  const draftKey = (formName: string) => `draft_submission_data_${formName}`;
+  const stepKey = (formName: string) => `draft_step_${formName}`;
+
+  /**
+   * The answers that may sit in the browser between visits.
+   *
+   * The draft lives in localStorage, which is plain text, survives the tab and
+   * is readable by anything else running on the origin. A password typed into
+   * a form has no business being kept there, so it is dropped on the way in and
+   * on the way out -- the visitor retypes it, which is the lesser cost.
+   */
+  function persistableValues(values: Record<string, any>): Record<string, any> {
+    const sensitive = new Set(
+      (formResource.value?.data?.fields || [])
+        .filter((field: FormField) => field.fieldtype === "Password")
+        .map((field: FormField) => field.fieldname)
+    );
+    if (sensitive.size === 0) return values;
+
+    return Object.fromEntries(
+      Object.entries(values).filter(([fieldname]) => !sensitive.has(fieldname))
+    );
+  }
+
   function initializeFields() {
     if (!formResource.value?.data) return;
 
@@ -150,13 +173,26 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
         // Initialize fields with defaults first
         initializeFields();
 
-        // Use VueUse's useStorage for reactive draft data
-        const draftKey = `draft_submission_data_${data.name}`;
-        const draftData = useStorage(draftKey, {}, localStorage);
-
-        if (draftData.value && Object.keys(draftData.value).length > 0) {
-          // Merge draft data with initialized fields
-          fields.value = { ...fields.value, ...draftData.value };
+        // Restore draft data & step progress from localStorage
+        try {
+          const rawDraft = localStorage.getItem(draftKey(data.name));
+          if (rawDraft) {
+            const parsed = JSON.parse(rawDraft);
+            if (parsed && typeof parsed === "object") {
+              // Filtered on the way in as well as out: a draft written by an
+              // earlier build may still hold a password.
+              fields.value = { ...fields.value, ...persistableValues(parsed) };
+            }
+          }
+          const savedStep = localStorage.getItem(stepKey(data.name));
+          if (savedStep && goToStep) {
+            const stepNum = parseInt(savedStep, 10);
+            if (!isNaN(stepNum) && stepNum >= 0 && stepNum < totalSteps.value) {
+              goToStep(stepNum);
+            }
+          }
+        } catch (e) {
+          // Ignore parse or storage errors
         }
 
         inFormFillingState.value = true;
@@ -382,10 +418,43 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     });
   }
 
+  // Watch fields and auto-persist draft data to localStorage
+  watch(
+    fields,
+    (newFields) => {
+      const formName = formResource.value?.data?.name;
+      if (formName && newFields && Object.keys(newFields).length > 0) {
+        try {
+          localStorage.setItem(
+            draftKey(formName),
+            JSON.stringify(persistableValues(newFields))
+          );
+        } catch (e) {
+          // Ignore storage quota errors
+        }
+      }
+    },
+    { deep: true }
+  );
+
+  // Watch currentStepIndex and persist current step to localStorage
+  watch(currentStepIndex, (newStep) => {
+    const formName = formResource.value?.data?.name;
+    if (formName) {
+      try {
+        localStorage.setItem(stepKey(formName), String(newStep));
+      } catch (e) {}
+    }
+  });
+
   function clearDraft() {
-    const draftKey = `draft_submission_data_${formResource.value.data.name}`;
-    const draftData = useStorage(draftKey, {}, localStorage);
-    draftData.value = {};
+    const formName = formResource.value?.data?.name;
+    if (formName) {
+      try {
+        localStorage.removeItem(draftKey(formName));
+        localStorage.removeItem(stepKey(formName));
+      } catch (e) {}
+    }
   }
 
   return {

@@ -76,7 +76,7 @@ import TableBuilderExtras from "@/components/fields/table/TableBuilderExtras.vue
 // ProseMirror/tiptap stack, which the sidebar, dashboard and submission list
 // were all paying for despite never rendering a rich-text field.
 const TextEditorAsync = defineAsyncComponent(
-  () => import("frappe-ui-text-editor")
+  () => import("@/components/fields/TextEditor.vue")
 );
 import { Fieldtype } from "@/types/FormsPro/form_field.types";
 
@@ -308,8 +308,8 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
       editorClass:
         "bg-surface-white w-full rounded-b form-description border rounded-b min-h-24",
       fixedMenu: true,
-      bubbleMenu: true,
-      starterkitOptions: { heading: { levels: [2, 3, 4] } },
+      bubbleMenu: false,
+      starterkitOptions: { heading: { levels: [1, 2, 3, 4, 5, 6] } },
     },
     layout: "description-first",
     frappeFieldtype: "Text Editor",
