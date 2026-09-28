@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Fieldtype } from "@/types/FormsPro/form_field.types";
 
 /**
@@ -60,5 +62,32 @@ describe("field palette coverage", () => {
     const stale = CATEGORISED.filter((name) => !known.has(name));
 
     expect(stale, `categorised but unknown: ${stale.join(", ")}`).toEqual([]);
+  });
+});
+
+/**
+ * The palette lists a field type only if the component registry has an entry
+ * for it. Currency was added to the enum and to a palette category but never
+ * to the registry, so it was invisible in the builder while these tests still
+ * passed -- they only ever compared the enum to the categories.
+ *
+ * Read as text rather than imported: the registry pulls in .vue files, which
+ * this runner has no plugin for.
+ */
+describe("field type registry", () => {
+  const registrySource = readFileSync(
+    fileURLToPath(new URL("../config/fieldTypes.ts", import.meta.url)),
+    "utf8"
+  );
+
+  it("registers a component for every field type", () => {
+    const unregistered = Object.keys(Fieldtype).filter(
+      (key) => !registrySource.includes(`name: Fieldtype.${key},`)
+    );
+
+    expect(
+      unregistered,
+      `field types with no registry entry: ${unregistered.join(", ")}`
+    ).toEqual([]);
   });
 });

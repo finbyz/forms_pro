@@ -245,6 +245,18 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
     isDate: false,
   },
   {
+    // Frappe's own Currency type: stored with its scale and formatted per the
+    // site's currency settings in the desk, not as a bare number.
+    name: Fieldtype.CURRENCY,
+    component: FormControl,
+    icon: Banknote,
+    props: { type: "number", variant: "outline", step: "0.01" },
+    layout: "default",
+    frappeFieldtype: "Currency",
+    isBoolean: false,
+    isDate: false,
+  },
+  {
     // Frappe stores a URL as Data with options "URL"; the browser gives us
     // keyboard and validation affordances for free with type="url".
     name: Fieldtype.URL,
