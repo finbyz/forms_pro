@@ -62,4 +62,6 @@ export interface FormField {
   default?: string;
   /**	Conditional Logic : Code	*/
   conditional_logic?: string;
+  /**	Allow Negative Numbers : Check	*/
+  allow_negative?: 0 | 1 | boolean;
 }

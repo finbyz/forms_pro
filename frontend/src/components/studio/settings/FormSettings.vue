@@ -363,14 +363,7 @@ ${scriptTag}`;
                 @change="saveSetting('naming_pattern', local.naming_pattern)"
               />
               <p class="text-xs text-ink-gray-5">
-                Blank for a generated id. Include a counter like
-                <code class="rounded bg-surface-gray-2 px-1">{#####}</code> to keep names unique.
-              </p>
-              <p class="text-xs text-ink-gray-5">
-                <code>{#####}</code> <code>{YYYY}</code> <code>{YY}</code>
-                <code>{MM}</code> <code>{DD}</code> <code>{WW}</code>
-                <code>{JJJ}</code> <code>{timestamp}</code>
-                <span v-for="t in namingFieldTokens" :key="t"><code>{{ t }}</code> </span>
+                Leave blank for generated ID. Tokens: <code class="rounded bg-surface-gray-2 px-1">{#####}</code>, <code class="rounded bg-surface-gray-2 px-1">{YYYY}</code>, <code class="rounded bg-surface-gray-2 px-1">{MM}</code>, <code class="rounded bg-surface-gray-2 px-1">{fieldname}</code>
               </p>
             </div>
             <div class="flex flex-col gap-2">

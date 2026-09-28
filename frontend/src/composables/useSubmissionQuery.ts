@@ -61,7 +61,13 @@ export function useSubmissionQuery(formId: () => string, options: { pageLength?:
     function serialise(source: "column" | "answer") {
         return filters.value
             .filter((entry) => entry.source === source && usable(entry))
-            .map((entry) => [entry.field, entry.operator, entry.value ?? null]);
+            .map((entry) => {
+                let val = entry.value;
+                if (LIST_OPERATORS.includes(entry.operator) && typeof val === "string") {
+                    val = val.split(",").map((v) => v.trim()).filter(Boolean);
+                }
+                return [entry.field, entry.operator, val ?? null];
+            });
     }
 
     async function fetchPage() {
@@ -114,9 +120,33 @@ export function useSubmissionQuery(formId: () => string, options: { pageLength?:
         return fetchPage();
     }
 
-    function addFilter(source: "column" | "answer" = "column") {
-        const pool = source === "column" ? columnFields.value : answerFields.value;
-        filters.value.push({ source, field: pool[0]?.field ?? "", operator: "=", value: "" });
+    function addFilter(arg?: "column" | "answer" | { source: "column" | "answer"; field: string }) {
+        let source: "column" | "answer" = "column";
+        let field = "";
+
+        if (typeof arg === "object" && arg !== null) {
+            source = arg.source;
+            field = arg.field;
+        } else if (arg === "column" || arg === "answer") {
+            source = arg;
+            const pool = source === "column" ? columnFields.value : answerFields.value;
+            field = pool[0]?.field ?? "";
+        } else {
+            if (answerFields.value.length > 0) {
+                source = "answer";
+                field = answerFields.value[0]?.field ?? "";
+            } else if (columnFields.value.length > 0) {
+                source = "column";
+                field = columnFields.value[0]?.field ?? "";
+            }
+        }
+
+        filters.value.push({
+            source,
+            field: field || (columnFields.value[0]?.field ?? "status"),
+            operator: "=",
+            value: "",
+        });
     }
 
     function removeFilter(index: number) {

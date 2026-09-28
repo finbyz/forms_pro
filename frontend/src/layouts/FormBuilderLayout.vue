@@ -7,7 +7,6 @@ import FormBuilderContent from "@/components/FormBuilderContent.vue";
 import FieldEditorSidebar from "@/components/FieldEditorSidebar.vue";
 import ThemeEditor from "@/components/studio/design/ThemeEditor.vue";
 import FormSettings from "@/components/studio/settings/FormSettings.vue";
-import SubmissionsBrowser from "@/components/studio/submissions/SubmissionsBrowser.vue";
 import VersionsHistory from "@/components/studio/versions/VersionsHistory.vue";
 import AnalyticsPanel from "@/components/studio/AnalyticsPanel.vue";
 import { useEditForm } from "@/stores/editForm";
@@ -34,9 +33,6 @@ useKeyboardShortcuts();
             </template>
             <template v-else-if="activeTab === 'Settings'">
                 <FormSettings class="w-full overflow-y-auto" />
-            </template>
-            <template v-else-if="activeTab === 'Submissions'">
-                <SubmissionsBrowser class="w-full overflow-y-auto" />
             </template>
             <template v-else-if="activeTab === 'Versions'">
                 <VersionsHistory class="w-full overflow-y-auto" />

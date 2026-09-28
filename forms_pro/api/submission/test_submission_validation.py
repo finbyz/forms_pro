@@ -15,7 +15,7 @@ from forms_pro.utils.constants import FORMS_PRO_SYSTEM_FIELDNAMES, UNSUPPORTED_F
 from forms_pro.utils.form_generator import LINKED_FORM_FIELDOPTIONS, SUBMISSION_STATUS_FIELDOPTIONS
 
 
-def _field(fieldname, fieldtype="Data", label=None, reqd=0, hidden=0, conditional_logic=None):
+def _field(fieldname, fieldtype="Data", label=None, reqd=0, hidden=0, conditional_logic=None, allow_negative=0):
     """Build a minimal field stub matching what _validate_form_response expects."""
     return SimpleNamespace(
         fieldname=fieldname,
@@ -24,6 +24,7 @@ def _field(fieldname, fieldtype="Data", label=None, reqd=0, hidden=0, conditiona
         reqd=reqd,
         hidden=hidden,
         conditional_logic=conditional_logic,
+        allow_negative=allow_negative,
     )
 
 
@@ -124,6 +125,14 @@ class TestEvaluateConditions(unittest.TestCase):
         conditions = [{"fieldname": "agreed", "operator": "Is", "value": True}]
         self.assertTrue(_evaluate_conditions(conditions, {"agreed": 1}, fields))
         self.assertFalse(_evaluate_conditions(conditions, {"agreed": 0}, fields))
+    def test_select_condition_case_insensitive(self):
+        """Select field condition 'other ERP' must match submitted 'Other ERP'."""
+        fields = self._field_map(_field("erp", "Select"))
+        conditions = [{"fieldname": "erp", "operator": "Is", "value": "other ERP"}]
+        self.assertTrue(_evaluate_conditions(conditions, {"erp": "Other ERP"}, fields))
+        self.assertTrue(_evaluate_conditions(conditions, {"erp": "OTHER ERP"}, fields))
+        self.assertFalse(_evaluate_conditions(conditions, {"erp": "SAP"}, fields))
+
 
 
 class TestValidateFormResponse(unittest.TestCase):
@@ -179,6 +188,99 @@ class TestValidateFormResponse(unittest.TestCase):
         # extra is required but should be hidden when flag=yes — no error expected
         _validate_form_response(form, {"flag": "yes", "extra": ""})
 
+    def test_conditional_show_hides_unmet_field_from_validation(self):
+        """A field targeted by Show Field must stay hidden (and skip validation) when condition is unmet."""
+        logic = json.dumps(
+            {
+                "target_field": "preferred_demo_date",
+                "action": "Show Field",
+                "conditions": [{"fieldname": "wants_demo", "operator": "Is", "value": "1"}],
+            }
+        )
+        wants_demo = _field("wants_demo", fieldtype="Check")
+        demo_date = _field("preferred_demo_date", fieldtype="Date", reqd=1)
+        wants_demo_logic = _field("wants_demo", conditional_logic=logic)
+
+        form = _form(wants_demo, demo_date, wants_demo_logic)
+        # wants_demo is 0 / not checked: preferred_demo_date is hidden and must not raise even if empty
+        _validate_form_response(form, {"wants_demo": 0, "preferred_demo_date": ""})
+
+    def test_conditional_show_validates_when_condition_met(self):
+        """When Show Field condition is satisfied, the field becomes visible and is required."""
+        import frappe
+
+        logic = json.dumps(
+            {
+                "target_field": "preferred_demo_date",
+                "action": "Show Field",
+                "conditions": [{"fieldname": "wants_demo", "operator": "Is", "value": "1"}],
+            }
+        )
+        wants_demo = _field("wants_demo", fieldtype="Check")
+        demo_date = _field("preferred_demo_date", fieldtype="Date", reqd=1)
+        wants_demo_logic = _field("wants_demo", conditional_logic=logic)
+
+        form = _form(wants_demo, demo_date, wants_demo_logic)
+        # wants_demo is 1: preferred_demo_date is visible and must raise if empty
+        with self.assertRaises(frappe.ValidationError):
+            _validate_form_response(form, {"wants_demo": 1, "preferred_demo_date": ""})
+
+    def test_step_rule_triggered_from_inside_that_step_governs_nothing(self):
+        """
+        A rule cannot gate the step its own trigger sits in.
+
+        Hiding the step would hide the question driving it. This once governed
+        "everything after the trigger", which quietly swept up neighbouring
+        fields nobody had pointed the rule at.
+        """
+        import frappe
+
+        logic = json.dumps(
+            {
+                "target_field": "section_2",
+                "action": "Show Field",
+                "conditions": [{"fieldname": "existing_company", "operator": "Is", "value": "1"}],
+            }
+        )
+        pb = _field("section_2", fieldtype="Page Break", label="Company Information")
+        switch = _field("existing_company", fieldtype="Switch", conditional_logic=logic)
+        address = _field("company_address", fieldtype="Data", reqd=1)
+
+        form = _form(pb, switch, address)
+
+        # The address is shown either way, so it is required either way.
+        with self.assertRaises(frappe.ValidationError):
+            _validate_form_response(form, {"existing_company": 0, "company_address": ""})
+        with self.assertRaises(frappe.ValidationError):
+            _validate_form_response(form, {"existing_company": 1, "company_address": ""})
+
+    def test_step_rule_triggered_from_outside_governs_the_whole_step(self):
+        """A rule pointed at a step from elsewhere gates every field in it."""
+        import frappe
+
+        logic = json.dumps(
+            {
+                "target_field": "section_2",
+                "action": "Show Field",
+                "conditions": [{"fieldname": "has_company", "operator": "Is", "value": "1"}],
+            }
+        )
+        switch = _field("has_company", fieldtype="Switch", conditional_logic=logic)
+        pb = _field("section_2", fieldtype="Page Break", label="Company Information")
+        name = _field("company_name", fieldtype="Data", reqd=1)
+        address = _field("company_address", fieldtype="Data", reqd=1)
+
+        form = _form(switch, pb, name, address)
+
+        # Step hidden: neither field is asked for.
+        _validate_form_response(form, {"has_company": 0})
+
+        # Step shown: both are.
+        with self.assertRaises(frappe.ValidationError) as ctx:
+            _validate_form_response(form, {"has_company": 1})
+        self.assertIn("Company Name", str(ctx.exception))
+        self.assertIn("Company Address", str(ctx.exception))
+
     def test_multiple_missing_fields_all_reported(self):
         """All missing required fields should appear in the error, not just the first."""
         import frappe
@@ -203,6 +305,30 @@ class TestValidateFormResponse(unittest.TestCase):
         """Boolean False (unchecked Switch) is a valid value for a required field."""
         form = _form(_field("agreed", fieldtype="Switch", reqd=1))
         _validate_form_response(form, {"agreed": False})  # must not raise
+
+    def test_negative_number_disallowed_by_default(self):
+        import frappe
+
+        form = _form(_field("amount", fieldtype="Number"))
+        with self.assertRaises(frappe.ValidationError) as ctx:
+            _validate_form_response(form, {"amount": -10})
+        self.assertIn("cannot be negative", str(ctx.exception))
+
+    def test_negative_number_allowed_when_configured(self):
+        form = _form(_field("amount", fieldtype="Number", allow_negative=1))
+        _validate_form_response(form, {"amount": -10})  # must not raise
+
+    def test_negative_currency_disallowed_by_default(self):
+        import frappe
+
+        form = _form(_field("price", fieldtype="Currency"))
+        with self.assertRaises(frappe.ValidationError) as ctx:
+            _validate_form_response(form, {"price": "-50.00"})
+        self.assertIn("cannot be negative", str(ctx.exception))
+
+    def test_negative_currency_allowed_when_configured(self):
+        form = _form(_field("price", fieldtype="Currency", allow_negative=1))
+        _validate_form_response(form, {"price": "-50.00"})  # must not raise
 
 
 class TestConstants(unittest.TestCase):

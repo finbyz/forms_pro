@@ -428,3 +428,29 @@ def get_languages() -> list[dict]:
     return [
         {"value": lang.name, "label": lang.language_name or lang.name} for lang in languages
     ]
+
+
+@frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
+def validate_phone(phone_number: str = "", label: str = "") -> dict:
+    """
+    Validate a phone number using Frappe's exact country-code validator.
+    Called by multi-step form navigation and field blur to ensure the validation
+    error appears on the specific page where the field is located, not on final submit.
+    """
+    if not phone_number or not str(phone_number).strip():
+        return {"valid": True}
+
+    from frappe.utils import validate_phone_number_with_country_code
+
+    phone = str(phone_number).strip()
+    try:
+        validate_phone_number_with_country_code(phone, label or "phone")
+        return {"valid": True}
+    except Exception as e:
+        msg = str(e).replace("<strong>", "").replace("</strong>", "").strip()
+        if not msg:
+            msg = frappe._("Phone Number {0} set in field {1} is not valid.").format(
+                phone, label or "phone"
+            )
+        return {"valid": False, "message": msg}
+

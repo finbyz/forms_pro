@@ -23,15 +23,20 @@ def _coerce_field_value(value: Any, fieldtype: str) -> Any:
     """Coerce a submitted value to its comparable type, matching frontend conditionals.ts logic."""
     if value is None or value == "":
         return None
-    # Matches isBoolean types in the frontend registry (Switch, Checkbox)
-    if fieldtype in ("Switch", "Checkbox"):
+    # Matches isBoolean types in the frontend registry (Switch, Checkbox, Check)
+    if fieldtype in ("Switch", "Checkbox", "Check"):
+        if isinstance(value, str):
+            v = value.strip().lower()
+            return v in ("1", "true", "yes", "checked", "on")
         return bool(value)
-    if fieldtype == "Number":
+    if fieldtype in ("Number", "Currency", "Float", "Int", "Percent"):
         try:
+            if isinstance(value, str):
+                value = value.replace(",", "").strip()
             return float(value)
         except (TypeError, ValueError):
             return None
-    return str(value)
+    return str(value).strip()
 
 
 def _evaluate_conditions(conditions: list[dict], form_data: dict, field_map: dict) -> bool:
@@ -39,23 +44,69 @@ def _evaluate_conditions(conditions: list[dict], form_data: dict, field_map: dic
     for condition in conditions:
         fieldname = condition.get("fieldname")
         operator = condition.get("operator")
-        expected = condition.get("value")
+        expected_raw = condition.get("value")
         field = field_map.get(fieldname)
         if not field:
             return False
+
         actual = _coerce_field_value(form_data.get(fieldname), field.fieldtype)
-        # Coerce the condition's expected value through the same function so
-        # types match — avoids str(True)=="True" vs "true" mismatches and
-        # str(3.0)=="3.0" vs "3" mismatches for Number fields.
-        expected_coerced = _coerce_field_value(expected, field.fieldtype)
-        if operator == "Is" and actual != expected_coerced:
-            return False
-        if operator == "Is Not" and actual == expected_coerced:
-            return False
-        if operator == "Is Empty" and actual is not None and actual != "":
-            return False
-        if operator == "Is Not Empty" and (actual is None or actual == ""):
-            return False
+        expected = _coerce_field_value(expected_raw, field.fieldtype)
+
+        is_bool = field.fieldtype in ("Switch", "Checkbox", "Check")
+        is_num = isinstance(actual, (int, float)) and isinstance(expected, (int, float))
+
+        if operator == "Is":
+            if is_bool or is_num:
+                if actual != expected:
+                    return False
+            else:
+                if str(actual or "").strip().lower() != str(expected or "").strip().lower():
+                    return False
+        elif operator == "Is Not":
+            if is_bool or is_num:
+                if actual == expected:
+                    return False
+            else:
+                if str(actual or "").strip().lower() == str(expected or "").strip().lower():
+                    return False
+        elif operator == "Is Empty":
+            if actual is not None and actual != "" and actual is not False:
+                return False
+        elif operator in ("Is Not Empty", "Is Set"):
+            if actual is None or actual == "" or actual is False:
+                return False
+        elif operator == "Contains":
+            if actual is None:
+                return False
+            if str(expected or "").lower() not in str(actual).lower():
+                return False
+        elif operator == "Does Not Contain":
+            if actual is not None and str(expected or "").lower() in str(actual).lower():
+                return False
+        elif operator == "Is Less Than":
+            if actual is None or expected is None or not (actual < expected):
+                return False
+        elif operator == "Is Less Than Or Equal To":
+            if actual is None or expected is None or not (actual <= expected):
+                return False
+        elif operator == "Is Greater Than":
+            if actual is None or expected is None or not (actual > expected):
+                return False
+        elif operator == "Is Greater Than Or Equal To":
+            if actual is None or expected is None or not (actual >= expected):
+                return False
+        elif operator == "Starts With":
+            if actual is None or not str(actual).lower().startswith(str(expected or "").lower()):
+                return False
+        elif operator == "Does Not Start With":
+            if actual is not None and str(actual).lower().startswith(str(expected or "").lower()):
+                return False
+        elif operator == "Ends With":
+            if actual is None or not str(actual).lower().endswith(str(expected or "").lower()):
+                return False
+        elif operator == "Does Not End With":
+            if actual is not None and str(actual).lower().endswith(str(expected or "").lower()):
+                return False
     return True
 
 
@@ -78,9 +129,15 @@ def _format_error(field, value) -> str | None:
             return _("{0} must be a valid email address").format(field.label)
 
     if field.fieldtype == "Phone":
-        digits = re.sub(r"\D", "", text)
-        if not (6 <= len(digits) <= 15):
-            return _("{0} must be a valid phone number").format(field.label)
+        from frappe.utils import validate_phone_number_with_country_code
+
+        try:
+            validate_phone_number_with_country_code(text, field.label or field.fieldname)
+        except Exception as e:
+            msg = str(e).replace("<strong>", "").replace("</strong>", "").strip()
+            return msg or _("Phone Number {0} set in field {1} is not valid.").format(
+                text, field.label or field.fieldname
+            )
 
     limit = int(getattr(field, "max_length", 0) or 0)
     if limit and len(text) > limit:
@@ -88,9 +145,15 @@ def _format_error(field, value) -> str | None:
 
     if field.fieldtype == "Currency":
         try:
-            float(text.replace(",", ""))
+            num = float(text.replace(",", ""))
         except (TypeError, ValueError):
             return _("{0} must be an amount").format(field.label)
+
+        allow_neg = getattr(field, "allow_negative", 0) if not isinstance(field, dict) else field.get("allow_negative", 0)
+        if isinstance(allow_neg, str):
+            allow_neg = allow_neg in ("1", "true", "True")
+        if not allow_neg and num < 0:
+            return _("{0} cannot be negative").format(field.label)
 
     if field.fieldtype == "URL":
         # Permissive on the scheme -- people type "example.com" -- but the host
@@ -102,11 +165,51 @@ def _format_error(field, value) -> str | None:
 
     if field.fieldtype == "Number":
         try:
-            float(text)
+            num = float(text)
         except (TypeError, ValueError):
             return _("{0} must be a number").format(field.label)
 
+        allow_neg = getattr(field, "allow_negative", 0) if not isinstance(field, dict) else field.get("allow_negative", 0)
+        if isinstance(allow_neg, str):
+            allow_neg = allow_neg in ("1", "true", "True")
+        if not allow_neg and num < 0:
+            return _("{0} cannot be negative").format(field.label)
+
     return None
+
+
+def _is_step_separator(fieldtype: str) -> bool:
+    return fieldtype in ("Page Break", "Tab Break", "Section Break")
+
+
+def _get_governed_fieldnames(separator_fieldname: str, fields: list, trigger_fieldnames: list[str]) -> list[str]:
+    """
+    The fields a rule reaches when it points at a step / section.
+
+    Targeting a step means the whole step. A rule triggered from inside the
+    step it targets is self-referential -- answering the question would hide
+    the question -- so it governs nothing. Kept in step with
+    `getGovernedFieldnames` in frontend/src/utils/conditionals.ts; the two
+    disagreeing means a field the visitor never saw is demanded on submit.
+    """
+    in_section = False
+    fields_in_section = []
+    for f in fields:
+        ftype = getattr(f, "fieldtype", None) or (f.get("fieldtype") if isinstance(f, dict) else "")
+        fname = getattr(f, "fieldname", None) or (f.get("fieldname") if isinstance(f, dict) else "")
+        if _is_step_separator(ftype):
+            if fname == separator_fieldname:
+                in_section = True
+                continue
+            elif in_section:
+                break
+        elif in_section:
+            fields_in_section.append(fname)
+
+    if any(t in fields_in_section for t in trigger_fieldnames):
+        return []
+
+    return fields_in_section
 
 
 def _validate_form_response(form: "Form", form_data: dict) -> None:
@@ -123,11 +226,7 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
     for field in form.fields:
         if field.fieldtype in _DISPLAY_ONLY_FIELDTYPES:
             continue
-        is_visible = not field.hidden
-        # A read-only field is displayed but not editable, so it can never be
-        # something the visitor failed to fill in.
-        is_required = bool(field.reqd) and not getattr(field, "read_only", 0)
-
+        targeting_rules = []
         for other in form.fields:
             if not other.conditional_logic:
                 continue
@@ -136,21 +235,51 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
             except (json.JSONDecodeError, TypeError):
                 continue
 
-            if logic.get("target_field") != field.fieldname:
-                continue
+            raw_target = logic.get("target_field") or other.fieldname
+            targets = raw_target if isinstance(raw_target, list) else [raw_target]
+            trigger_fields = [c.get("fieldname") for c in logic.get("conditions", []) if c.get("fieldname")]
 
-            conditions_met = _evaluate_conditions(logic.get("conditions", []), form_data, field_map)
-            if conditions_met:
-                action = logic.get("action")
-                if action == "Show Field":
-                    is_visible = True
-                elif action == "Hide Field":
-                    is_visible = False
-                elif action == "Require Answer":
-                    is_required = True
+            is_targeted = field.fieldname in targets
+            if not is_targeted:
+                for tgt in targets:
+                    governed = _get_governed_fieldnames(tgt, form.fields, trigger_fields)
+                    if field.fieldname in governed:
+                        is_targeted = True
+                        break
+
+            if is_targeted:
+                targeting_rules.append(logic)
+
+        show_rules = [r for r in targeting_rules if r.get("action") == "Show Field"]
+        hide_rules = [r for r in targeting_rules if r.get("action") == "Hide Field"]
+        require_rules = [r for r in targeting_rules if r.get("action") == "Require Answer"]
+
+        # Base visibility from field.hidden
+        is_visible = not field.hidden
+
+        # 1. Any Hide Field rule satisfied -> hide the field
+        for rule in hide_rules:
+            if _evaluate_conditions(rule.get("conditions", []), form_data, field_map):
+                is_visible = False
+                break
+        else:
+            # 2. If Show Field rules target this field, it is ONLY visible if at least one Show rule passes
+            if show_rules:
+                is_visible = any(
+                    _evaluate_conditions(rule.get("conditions", []), form_data, field_map)
+                    for rule in show_rules
+                )
 
         if not is_visible:
             continue
+
+        # A read-only field is displayed but not editable, so it can never be
+        # something the visitor failed to fill in.
+        is_required = bool(field.reqd) and not getattr(field, "read_only", 0)
+        for rule in require_rules:
+            if _evaluate_conditions(rule.get("conditions", []), form_data, field_map):
+                is_required = True
+                break
 
         value = form_data.get(field.fieldname)
         is_empty = value is None or value == "" or value == []

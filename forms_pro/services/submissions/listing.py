@@ -146,15 +146,33 @@ def _condition(column: str, operator: str, value: Any) -> tuple[str, list]:
     if operator == "is not set":
         return f"({column} is null or {column} = '')", []
     if operator in ("in", "not in"):
-        values = value if isinstance(value, (list, tuple)) else [value]
-        values = [v for v in values if v is not None]
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                values = parsed if isinstance(parsed, (list, tuple)) else [v.strip() for v in value.split(",") if v.strip()]
+            except Exception:
+                values = [v.strip() for v in value.split(",") if v.strip()]
+        elif isinstance(value, (list, tuple)):
+            values = list(value)
+        else:
+            values = [value] if value is not None else []
+        values = [v for v in values if v is not None and str(v).strip() != ""]
         if not values:
             # An empty set matches nothing; say so rather than emitting `in ()`.
             return ("1 = 0" if operator == "in" else "1 = 1"), []
         placeholders = ", ".join(["%s"] * len(values))
         return f"{column} {operator} ({placeholders})", list(values)
     if operator == "between":
-        values = value if isinstance(value, (list, tuple)) else []
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                values = parsed if isinstance(parsed, (list, tuple)) else [v.strip() for v in value.split(",") if v.strip()]
+            except Exception:
+                values = [v.strip() for v in value.split(",") if v.strip()]
+        elif isinstance(value, (list, tuple)):
+            values = list(value)
+        else:
+            values = []
         if len(values) != 2:
             raise SubmissionQueryError(_("A between filter needs exactly two values."))
         return f"{column} between %s and %s", list(values)
@@ -178,14 +196,32 @@ def _answer_condition(field_key: str, operator: str, value: Any) -> tuple[str, l
     if operator == "is not set":
         return f"({column} is null or {column} = '')", [field_key]
     if operator in ("in", "not in"):
-        values = value if isinstance(value, (list, tuple)) else [value]
-        values = [str(v) for v in values if v is not None]
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                values = parsed if isinstance(parsed, (list, tuple)) else [v.strip() for v in value.split(",") if v.strip()]
+            except Exception:
+                values = [v.strip() for v in value.split(",") if v.strip()]
+        elif isinstance(value, (list, tuple)):
+            values = list(value)
+        else:
+            values = [value] if value is not None else []
+        values = [str(v).strip() for v in values if v is not None and str(v).strip() != ""]
         if not values:
             return ("1 = 0" if operator == "in" else "1 = 1"), []
         placeholders = ", ".join(["%s"] * len(values))
         return f"{column} {operator} ({placeholders})", [field_key, *values]
     if operator == "between":
-        values = value if isinstance(value, (list, tuple)) else []
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                values = parsed if isinstance(parsed, (list, tuple)) else [v.strip() for v in value.split(",") if v.strip()]
+            except Exception:
+                values = [v.strip() for v in value.split(",") if v.strip()]
+        elif isinstance(value, (list, tuple)):
+            values = list(value)
+        else:
+            values = []
         if len(values) != 2:
             raise SubmissionQueryError(_("A between filter needs exactly two values."))
         return f"{column} between %s and %s", [field_key, *values]
@@ -339,7 +375,7 @@ def submission_filter_fields(form_id: str) -> dict:
             "parenttype": "Form",
             "fieldtype": ("not in", sorted(NON_ANSWER_FIELDTYPES)),
         },
-        fields=["fieldname", "field_key", "label", "fieldtype"],
+        fields=["fieldname", "field_key", "label", "fieldtype", "options"],
         order_by="idx asc",
     ):
         key = row.get("field_key") or row.get("fieldname")
@@ -350,12 +386,29 @@ def submission_filter_fields(form_id: str) -> dict:
                 "field": key,
                 "label": row.get("label") or key,
                 "fieldtype": row.get("fieldtype") or "Data",
+                "options": row.get("options"),
             }
         )
+
+    ordered_operators = [
+        "=",
+        "!=",
+        "like",
+        "not like",
+        "in",
+        "not in",
+        ">",
+        "<",
+        ">=",
+        "<=",
+        "between",
+        "is set",
+        "is not set",
+    ]
 
     return {
         "columns": columns,
         "answers": answers,
-        "operators": sorted(OPERATORS),
+        "operators": ordered_operators,
         "page_lengths": list(PAGE_LENGTHS),
     }

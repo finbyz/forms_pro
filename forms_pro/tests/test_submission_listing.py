@@ -113,6 +113,14 @@ class TestSubmissionListing(FrappeTestCase):
         page = listing.list_form_submissions(self.form, filters=[["status", "in", []]])
         self.assertEqual(page["total"], 0)
 
+    def test_in_filter_with_comma_separated_string(self):
+        page = listing.list_form_submissions(self.form, filters=[["status", "in", "Failed, Success"]])
+        self.assertGreater(page["total"], 0)
+
+    def test_in_filter_with_list(self):
+        page = listing.list_form_submissions(self.form, filters=[["status", "in", ["Failed", "Success"]]])
+        self.assertGreater(page["total"], 0)
+
     def test_payload_is_only_returned_when_asked_for(self):
         lean = listing.list_form_submissions(self.form, limit_page_length=1)["rows"][0]
         self.assertNotIn("payload", lean)

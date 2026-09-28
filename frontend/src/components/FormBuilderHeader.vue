@@ -15,7 +15,7 @@ const props = defineProps<{ activeTab: string }>();
 const emit = defineEmits<{ (e: "update:activeTab", value: string): void }>();
 
 const SUBMISSION_ROUTE_NAME = "Form Submission Page";
-const TABS = ["Build", "Design", "Settings", "Submissions", "Versions", "Analytics"] as const;
+const TABS = ["Build", "Design", "Settings", "Versions", "Analytics"] as const;
 
 const tabIndex = computed({
     get: () => {

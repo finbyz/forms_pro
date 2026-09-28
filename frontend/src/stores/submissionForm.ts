@@ -10,6 +10,7 @@ import {
   shouldFieldBeVisible,
 } from "@/utils/conditionals";
 import { useFormSteps } from "@/composables/useFormSteps";
+import { validatePhoneWithServer } from "@/utils/phone_validation";
 
 export type UserSubmission = {
   name: string;
@@ -91,9 +92,34 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     dropEmptySteps: true,
   });
 
-  function handleNextStep() {
+  async function handleNextStep() {
     validateValues(currentStepFields.value);
     if (errors.value.length > 0) return;
+
+    // Validate phone fields on current step with Frappe validator before moving forward
+    const phoneFields = (currentStepFields.value || []).filter(
+      (field: FormField) => field.fieldtype === "Phone" && fields.value[field.fieldname]
+    );
+
+    if (phoneFields.length > 0) {
+      try {
+        for (const pf of phoneFields) {
+          const val = String(fields.value[pf.fieldname] || "").trim();
+          if (!val) continue;
+          const res = await validatePhoneWithServer(val, pf.label || pf.fieldname);
+          if (!res.valid) {
+            errors.value.push(
+              res.message || `Phone Number ${val} set in field ${pf.label || pf.fieldname} is not valid.`
+            );
+            return;
+          }
+        }
+      } catch (err: any) {
+        errors.value.push(err?.message || "Invalid phone number");
+        return;
+      }
+    }
+
     nextStep();
   }
 
@@ -241,6 +267,26 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
             "Error while submitting form. Check the values and try again."
           );
         }
+
+        // If error corresponds to a field on a previous step, navigate user back to that step
+        const allFields = formResource.value?.data?.fields || [];
+        for (const err of errors.value) {
+          const errLower = String(err).toLowerCase();
+          const matchField = allFields.find(
+            (f: FormField) =>
+              (f.fieldname && errLower.includes(f.fieldname.toLowerCase())) ||
+              (f.label && errLower.includes(f.label.toLowerCase()))
+          );
+          if (matchField) {
+            const stepIdx = steps.value.findIndex((step: any) =>
+              step.fields?.some((sf: FormField) => sf.fieldname === matchField.fieldname)
+            );
+            if (stepIdx >= 0 && stepIdx !== currentStepIndex.value) {
+              goToStep(stepIdx);
+              break;
+            }
+          }
+        }
       },
     });
 
@@ -283,16 +329,30 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
       return `${field.label} must be ${limit} characters or fewer`;
     }
 
-    if (field.fieldtype === "Currency" && Number.isNaN(Number(String(value).replace(/,/g, "")))) {
-      return `${field.label} must be an amount`;
+    if (field.fieldtype === "Currency") {
+      const num = Number(String(value).replace(/,/g, ""));
+      if (Number.isNaN(num)) {
+        return `${field.label} must be an amount`;
+      }
+      const allowNeg = Boolean(field.allow_negative);
+      if (!allowNeg && num < 0) {
+        return `${field.label} cannot be negative`;
+      }
     }
 
     if (field.fieldtype === "URL" && !isPlausibleUrl(String(value))) {
       return `${field.label} must be a valid URL (for example https://example.com)`;
     }
 
-    if (field.fieldtype === "Number" && Number.isNaN(Number(value))) {
-      return `${field.label} must be a number`;
+    if (field.fieldtype === "Number") {
+      const num = Number(value);
+      if (Number.isNaN(num)) {
+        return `${field.label} must be a number`;
+      }
+      const allowNeg = Boolean(field.allow_negative);
+      if (!allowNeg && num < 0) {
+        return `${field.label} cannot be negative`;
+      }
     }
 
     return null;

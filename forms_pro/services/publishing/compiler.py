@@ -54,6 +54,7 @@ class FormCompiler:
         "max_length",
         "description",
         "conditional_logic",
+        "allow_negative",
         "row_index",
         "column_index",
         "cell_index",

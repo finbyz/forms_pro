@@ -11,6 +11,7 @@
   "cell_index",
   "reqd",
   "max_length",
+  "allow_negative",
   "hidden",
   "read_only",
   "label",
@@ -63,6 +64,13 @@
    "label": "Max Characters",
    "default": "0",
    "description": "Longest answer allowed. 0 for no limit."
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_negative",
+   "fieldtype": "Check",
+   "label": "Allow Negative Numbers",
+   "description": "Allow negative values on Number and Currency fields."
   },
   {
    "fieldname": "options",

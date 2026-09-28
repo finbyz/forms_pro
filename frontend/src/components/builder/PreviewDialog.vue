@@ -9,6 +9,7 @@ import StepIndicator from "@/components/submission/StepIndicator.vue";
 import { useFormSteps } from "@/composables/useFormSteps";
 import { useGroupedRows } from "@/composables/useGroupedRows";
 import { shouldFieldBeVisible, shouldFieldBeRequired } from "@/utils/conditionals";
+import { validatePhoneWithServer } from "@/utils/phone_validation";
 import type { FormField } from "@/types/formfield";
 
 const props = defineProps<{ show: boolean }>();
@@ -97,8 +98,26 @@ function formatError(field: FormField, value: any): string | null {
     return `${field.label} must be a valid phone number`;
   }
 
-  if (field.fieldtype === "Number" && Number.isNaN(Number(value))) {
-    return `${field.label} must be a number`;
+  if (field.fieldtype === "Currency") {
+    const num = Number(String(value).replace(/,/g, ""));
+    if (Number.isNaN(num)) {
+      return `${field.label} must be an amount`;
+    }
+    const allowNeg = Boolean((field as any).allow_negative);
+    if (!allowNeg && num < 0) {
+      return `${field.label} cannot be negative`;
+    }
+  }
+
+  if (field.fieldtype === "Number") {
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+      return `${field.label} must be a number`;
+    }
+    const allowNeg = Boolean((field as any).allow_negative);
+    if (!allowNeg && num < 0) {
+      return `${field.label} cannot be negative`;
+    }
   }
 
   return null;
@@ -141,11 +160,28 @@ function validateStepFields(fieldsToValidate?: FormField[]): boolean {
   return previewErrors.value.length === 0;
 }
 
-function handleNextStep() {
+async function handleNextStep() {
   if (!validateStepFields(currentStepFields.value)) {
     return;
   }
   previewErrors.value = [];
+
+  const phoneFields = (currentStepFields.value || []).filter(
+    (field: FormField) => field.fieldtype === "Phone" && previewValues.value[field.fieldname]
+  );
+
+  for (const pf of phoneFields) {
+    const val = String(previewValues.value[pf.fieldname] || "").trim();
+    if (!val) continue;
+    const res = await validatePhoneWithServer(val, pf.label || pf.fieldname);
+    if (!res.valid) {
+      previewErrors.value.push(
+        res.message || `Phone Number ${val} set in field ${pf.label || pf.fieldname} is not valid.`
+      );
+      return;
+    }
+  }
+
   nextStep();
 }
 

@@ -2,6 +2,7 @@
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { FormControl } from "frappe-ui";
 import { onClickOutside } from "@vueuse/core";
+import { validatePhoneWithServer } from "@/utils/phone_validation";
 
 export type Country = {
     code: string; // ISO country code (e.g., "IN", "US")
@@ -239,6 +240,30 @@ function onNativeInput(event: Event) {
     sanitizeInputElement(el);
     phoneNumber.value = el.value;
     updatePhoneValue();
+    if (phoneError.value) {
+        phoneError.value = "";
+    }
+}
+
+const phoneError = ref<string>("");
+
+async function validatePhone() {
+    if (!phoneNumber.value || !phoneNumber.value.trim()) {
+        phoneError.value = "";
+        return;
+    }
+    const fullNumber = getFullPhoneNumber();
+    const sanitizedNumber = sanitizePhoneNumber(fullNumber);
+    const res = await validatePhoneWithServer(sanitizedNumber, props.field.label || props.field.fieldname);
+    if (!res.valid) {
+        phoneError.value = res.message || `${props.field.label || 'Phone number'} is not valid.`;
+    } else {
+        phoneError.value = "";
+    }
+}
+
+function onNativeBlur() {
+    validatePhone();
 }
 
 onMounted(() => {
@@ -247,16 +272,21 @@ onMounted(() => {
     if (!el) return;
     phoneInputEl.value = el;
     el.addEventListener("input", onNativeInput);
+    el.addEventListener("blur", onNativeBlur);
     el.setAttribute("inputmode", "tel");
 });
 
 onUnmounted(() => {
     phoneInputEl.value?.removeEventListener("input", onNativeInput);
+    phoneInputEl.value?.removeEventListener("blur", onNativeBlur);
 });
 
 const handlePhoneNumberChange = (value: string) => {
     phoneNumber.value = (value ?? "").replace(PHONE_DISALLOWED, "");
     updatePhoneValue();
+    if (phoneError.value) {
+        phoneError.value = "";
+    }
 };
 </script>
 
@@ -329,6 +359,7 @@ const handlePhoneNumberChange = (value: string) => {
                 </template>
             </FormControl>
         </div>
+        <p v-if="phoneError" class="text-xs text-red-600 mt-0.5 font-medium">{{ phoneError }}</p>
     </div>
 </template>
 

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import json
+
 import frappe
 from frappe.model.document import Document
 
@@ -55,6 +57,12 @@ class TargetAdapter:
                 df = self.target_meta.get_field(fieldname)
                 if df.fieldtype == "Table" and isinstance(value, list):
                     self._set_child_rows(doc, fieldname, value, df.options)
+                elif isinstance(value, (list, dict)):
+                    # A Multiselect arrives as a list and its column is JSON.
+                    # Frappe refuses a list on anything but a Table field
+                    # ("Value for X cannot be a list"), so serialise it here --
+                    # the one place that knows the column's real type.
+                    doc.set(fieldname, json.dumps(value))
                 else:
                     doc.set(fieldname, value)
         return doc

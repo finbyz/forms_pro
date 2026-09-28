@@ -102,6 +102,7 @@ class FormField(Document):
         parenttype: DF.Data
         reqd: DF.Check
         max_length: DF.Int
+        allow_negative: DF.Check
         row_index: DF.Int
     # end: auto-generated types
 

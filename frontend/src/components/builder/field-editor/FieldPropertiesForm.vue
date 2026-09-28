@@ -7,6 +7,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import type { Component } from "vue";
 import ConditionalLogicSection from "./ConditionalLogicSection.vue";
 import { fetchLanguages, type LanguageOption } from "@/utils/languages";
+import { COMMON_CURRENCY_OPTIONS } from "@/utils/currencies";
 
 const activeTab = ref("General");
 const tabs = ["General", "Validation", "Logic"];
@@ -56,6 +57,14 @@ const takesOptionList = computed(() =>
 
 const isLinkField = computed(
     () => String(editFormStore.selectedField?.fieldtype ?? "") === "Link"
+);
+
+const isCurrencyField = computed(
+    () => String(editFormStore.selectedField?.fieldtype ?? "") === "Currency"
+);
+
+const isNumberField = computed(
+    () => ["Number", "Currency"].includes(String(editFormStore.selectedField?.fieldtype ?? ""))
 );
 
 /**
@@ -162,6 +171,16 @@ const fieldProperties = computed(() => {
             },
         },
         {
+            fieldname: "allow_negative",
+            component: FormControl,
+            visible: isNumberField.value,
+            props: {
+                type: "checkbox",
+                label: "Allow Negative Numbers",
+                description: "If disabled, the field only accepts zero and positive numbers.",
+            },
+        },
+        {
             fieldname: "read_only",
             component: FormControl,
             props: {
@@ -208,6 +227,18 @@ const fieldProperties = computed(() => {
                 label: "Linked DocType",
                 description: "Records of this DocType are offered in the dropdown.",
                 variant: "outline",
+            },
+        },
+        {
+            fieldname: "options",
+            component: FormControl,
+            visible: isCurrencyField.value,
+            props: {
+                type: "select",
+                label: "Currency",
+                description: "Currency symbol/code displayed with this amount.",
+                variant: "outline",
+                options: COMMON_CURRENCY_OPTIONS,
             },
         },
         {
@@ -296,7 +327,7 @@ const fieldProperties = computed(() => {
 const groupedProperties = computed(() => {
     return {
         General: fieldProperties.value.filter(p => ["label", "fieldname", "placeholder", "fieldtype", "description"].includes(p.fieldname)),
-        Validation: fieldProperties.value.filter(p => ["reqd", "hidden", "read_only", "max_length", "default", "options"].includes(p.fieldname)),
+        Validation: fieldProperties.value.filter(p => ["reqd", "hidden", "read_only", "max_length", "allow_negative", "default", "options"].includes(p.fieldname)),
         Logic: fieldProperties.value.filter(p => ["target_field", "source_type", "mapping_type", "conditional_logic", "field_key"].includes(p.fieldname)),
     };
 });

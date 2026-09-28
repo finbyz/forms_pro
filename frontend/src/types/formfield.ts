@@ -11,6 +11,7 @@ export type FormField = {
   options?: string;
   default?: string;
   idx?: number;
+  allow_negative?: boolean | number;
   conditional_logic?: string;
   field_key?: string;
   source_type?: "Target Field" | "Form Field" | "Presentation" | "System";

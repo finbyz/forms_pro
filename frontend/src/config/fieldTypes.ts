@@ -19,7 +19,9 @@
  */
 
 import { defineAsyncComponent, type Component } from "vue";
+import Currency from "@/components/fields/Currency.vue";
 import Language from "@/components/fields/Language.vue";
+import NumberField from "@/components/fields/Number.vue";
 import SearchSelect from "@/components/fields/SearchSelect.vue";
 import {
   Checkbox,
@@ -149,9 +151,9 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   },
   {
     name: Fieldtype.NUMBER,
-    component: FormControl,
+    component: NumberField,
     icon: Hash,
-    props: { type: "number", variant: "outline" },
+    props: {},
     layout: "default",
     frappeFieldtype: "Int",
     isBoolean: false,
@@ -246,11 +248,11 @@ export const FIELD_TYPE_DEFINITIONS: FieldTypeDefinition[] = [
   },
   {
     // Frappe's own Currency type: stored with its scale and formatted per the
-    // site's currency settings in the desk, not as a bare number.
+    // site's currency settings in the desk, with symbol prefix and thousands formatting.
     name: Fieldtype.CURRENCY,
-    component: FormControl,
+    component: Currency,
     icon: Banknote,
-    props: { type: "number", variant: "outline", step: "0.01" },
+    props: { variant: "outline" },
     layout: "default",
     frappeFieldtype: "Currency",
     isBoolean: false,

@@ -13,6 +13,7 @@ from .endpoints import (
     remove_form_access,
     set_form_permission,
     toggle_form_published,
+    validate_phone,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "remove_form_access",
     "set_form_permission",
     "toggle_form_published",
+    "validate_phone",
 ]
