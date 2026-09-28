@@ -25,6 +25,11 @@ const COLUMN_TYPES = [
     "Checkbox",
     "Textarea",
     "Link",
+    // Lets a table hold one file per row, which is how a form offers multiple
+    // file uploads -- there is no multi-file field type.
+    "Attach",
+    "Currency",
+    "URL",
 ];
 
 const columns = ref<Column[]>([]);
@@ -67,7 +72,16 @@ async function createTable() {
             }),
         });
         await res.fetch();
-        emit("update:field", { ...props.field, options: res.data.doctype });
+
+        // Assign onto the field the store already holds, rather than emitting a
+        // replacement object: the parent binds the live field, so a new object
+        // was dropped and `options` stayed empty -- the table was created on the
+        // server while the builder still offered "Create table" and showed no
+        // columns until the panel was reopened.
+        props.field.options = res.data.doctype;
+        emit("update:field", props.field);
+
+        await loadColumns();
         toast.success(`Created table "${res.data.doctype}"`);
     } catch (e: any) {
         toast.error("Could not create the table", { description: e?.message });

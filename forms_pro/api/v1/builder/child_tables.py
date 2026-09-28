@@ -22,6 +22,11 @@ ALLOWED_COLUMN_TYPES = (
     "Checkbox",
     "Textarea",
     "Link",
+    # One file per row is how a form collects several uploads; there is no
+    # multi-file field type, so a table of Attach rows is the way to do it.
+    "Attach",
+    "Currency",
+    "URL",
 )
 
 
