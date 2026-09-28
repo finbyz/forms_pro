@@ -426,3 +426,40 @@ def get_submission_for_document(doctype: str, docname: str) -> dict | None:
         "submission": submission.name if submission else None,
         "submitted_at": submission.submitted_at if submission else None,
     }
+
+
+@frappe.whitelist()
+def reveal_password_field(doctype: str, docname: str, fieldname: str) -> str:
+    """
+    Show the value a visitor typed into a Password field.
+
+    Frappe stores a Password field encrypted and hands the desk `***`, and its
+    eye icon only unmasks what is being typed -- so an answer already submitted
+    could not be read back at all. Storing it as plain text instead would fix
+    the symptom by removing the protection, so the value stays encrypted and is
+    decrypted only on request, by someone who may already read the record.
+
+    Every reveal is written to the Access Log, because reading someone's
+    submitted secret should leave a trace.
+    """
+    if not (doctype and docname and fieldname):
+        frappe.throw(_("Document and field are required"), frappe.ValidationError)
+
+    if not frappe.has_permission(doctype, "read", docname):
+        frappe.throw(_("You do not have read access to this document"), frappe.PermissionError)
+
+    field = frappe.get_meta(doctype).get_field(fieldname)
+    if not field or field.fieldtype != "Password":
+        frappe.throw(_("{0} is not a password field").format(fieldname), frappe.ValidationError)
+
+    from frappe.core.doctype.access_log.access_log import make_access_log
+    from frappe.utils.password import get_decrypted_password
+
+    make_access_log(
+        doctype=doctype,
+        document=docname,
+        columns=fieldname,
+        method="forms_pro.api.submission.reveal_password_field",
+    )
+
+    return get_decrypted_password(doctype, docname, fieldname, raise_exception=False) or ""

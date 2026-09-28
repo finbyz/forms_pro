@@ -363,27 +363,15 @@ ${scriptTag}`;
                 @change="saveSetting('naming_pattern', local.naming_pattern)"
               />
               <p class="text-xs text-ink-gray-5">
-                How each submission is named. Leave blank for a generated id.
-                <strong>Always include a counter</strong> such as
-                <code class="rounded bg-surface-gray-2 px-1">{#####}</code> — without one,
-                two people answering the same way would clash and the second submission
-                would fail.
+                Blank for a generated id. Include a counter like
+                <code class="rounded bg-surface-gray-2 px-1">{#####}</code> to keep names unique.
               </p>
-              <div class="rounded bg-surface-gray-2 px-2 py-1.5 text-xs text-ink-gray-6">
-                <p class="mb-1">
-                  <code>{#####}</code> counter ·
-                  <code>{YYYY}</code> <code>{YY}</code> <code>{MM}</code>
-                  <code>{DD}</code> <code>{WW}</code> <code>{JJJ}</code> ·
-                  <code>{timestamp}</code>
-                </p>
-                <p v-if="namingFieldTokens.length">
-                  This form's answers:
-                  <code v-for="t in namingFieldTokens" :key="t" class="mr-1">{{ t }}</code>
-                </p>
-                <p class="mt-1 text-ink-gray-5">
-                  Example: <code>ENQ-{YYYY}-{MM}-{#####}</code> → ENQ-2026-09-00001
-                </p>
-              </div>
+              <p class="text-xs text-ink-gray-5">
+                <code>{#####}</code> <code>{YYYY}</code> <code>{YY}</code>
+                <code>{MM}</code> <code>{DD}</code> <code>{WW}</code>
+                <code>{JJJ}</code> <code>{timestamp}</code>
+                <span v-for="t in namingFieldTokens" :key="t"><code>{{ t }}</code> </span>
+              </p>
             </div>
             <div class="flex flex-col gap-2">
               <label class="text-sm text-ink-gray-6">Success Mode</label>

@@ -73,3 +73,60 @@
         });
     });
 })();
+
+// Forms Pro: read back a password a visitor submitted.
+//
+// Frappe encrypts a Password field and sends the desk `***`; its own eye icon
+// only unmasks what is being typed, so a submitted answer could not be read at
+// all. This adds a reveal button per password field on records a form created.
+// The value is fetched on demand and never rendered until asked for.
+(function () {
+    if (typeof frappe === "undefined" || typeof $ === "undefined") return;
+
+    $(document).on("form-refresh", function (e, frm) {
+        if (!frm || !frm.doc || frm.is_new()) return;
+        if (!frm.doc.fp_linked_form) return;
+
+        (frm.meta.fields || [])
+            .filter(function (df) {
+                return df.fieldtype === "Password";
+            })
+            .forEach(function (df) {
+                const field = frm.get_field(df.fieldname);
+                if (!field || !field.$wrapper || field.$wrapper.data("fp-reveal")) return;
+                field.$wrapper.data("fp-reveal", true);
+
+                const button = $(
+                    '<button type="button" class="btn btn-xs btn-default mt-1">' +
+                        __("Reveal submitted value") +
+                        "</button>"
+                );
+
+                button.on("click", function () {
+                    button.prop("disabled", true).text(__("Revealing…"));
+                    frappe.call({
+                        method: "forms_pro.api.submission.reveal_password_field",
+                        args: {
+                            doctype: frm.doc.doctype,
+                            docname: frm.doc.name,
+                            fieldname: df.fieldname,
+                        },
+                        callback: function (r) {
+                            const value = (r && r.message) || "";
+                            button.remove();
+                            field.$wrapper.append(
+                                $("<div class='text-muted small mt-1'></div>").text(
+                                    value || __("No value was submitted.")
+                                )
+                            );
+                        },
+                        error: function () {
+                            button.prop("disabled", false).text(__("Reveal submitted value"));
+                        },
+                    });
+                });
+
+                field.$wrapper.append(button);
+            });
+    });
+})();

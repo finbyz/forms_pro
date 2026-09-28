@@ -1,4 +1,5 @@
 from .endpoints import (
+    reveal_password_field,
     get_submission_for_document,
     get_all_submissions,
     get_submission_filter_fields,
@@ -10,6 +11,7 @@ from .endpoints import (
 )
 
 __all__ = [
+    "reveal_password_field",
     "get_submission_for_document",
     "get_all_submissions",
     "get_submission_filter_fields",
