@@ -27,7 +27,7 @@
   "status",
   "access_mode",
   "record_strategy",
-  "naming_field",
+  "naming_pattern",
   "create_target_fields",
   "success_mode",
   "success_schema_json",
@@ -162,10 +162,10 @@
    "default": "Create New"
   },
   {
-   "fieldname": "naming_field",
+   "fieldname": "naming_pattern",
    "fieldtype": "Data",
-   "label": "Name Records By",
-   "description": "Fieldname whose answer names each record, e.g. email. Leave blank to let the system generate an id."
+   "label": "Record Name Pattern",
+   "description": "How each submission is named, e.g. ENQ-{YYYY}-{#####}. Leave blank for a generated id."
   },
   {
    "fieldname": "create_target_fields",
@@ -219,7 +219,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-28 12:00:00.000000",
+ "modified": "2026-09-28 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Forms Pro",
  "name": "Form",

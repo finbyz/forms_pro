@@ -123,7 +123,7 @@ def get_form(form_id: str) -> dict:
         "access_mode": getattr(form, "access_mode", "Public"),
         "record_strategy": getattr(form, "record_strategy", "Create New"),
         "create_target_fields": getattr(form, "create_target_fields", 0),
-        "naming_field": getattr(form, "naming_field", ""),
+        "naming_pattern": getattr(form, "naming_pattern", ""),
         "login_required": getattr(form, "login_required", 0),
         "linked_team_id": getattr(form, "linked_team_id", None),
         "linked_team_name": (

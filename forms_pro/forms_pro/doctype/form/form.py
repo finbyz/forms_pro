@@ -3,6 +3,8 @@
 
 from typing import Any
 
+import re
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -180,31 +182,85 @@ class Form(Document):
 
     def _apply_record_naming(self, doctype_doc) -> None:
         """
-        Name records after one of the form's own answers.
+        Name submissions from a pattern, the way Frappe's own naming works.
 
-        A generated DocType had no `autoname`, so Frappe fell back to a random
-        hash and every submission came out as an unreadable id -- the author had
-        to go into the desk and set naming by hand before the form was usable.
-        Naming by a field the form already collects (an email, a reference) is
-        what makes the list readable.
+        Naming by a single field (`field:email`) makes that answer the primary
+        key, so the second person to use the same address cannot submit at all.
+        A pattern avoids that: it is Frappe's `format:` rule, where `{#####}`
+        is an incrementing counter that keeps every name unique.
+
+        Supported inside braces, exactly as in the desk:
+          {#####}      an incrementing number, one digit per #
+          {YYYY} {YY}  year        {MM} month     {DD} day
+          {WW}         week        {JJJ} day of year
+          {timestamp}  full timestamp
+          {fieldname}  the answer given for that field
+
+        A blank pattern leaves the DocType's naming alone, so a rule set by
+        hand in the desk is never overwritten.
+
+        Note that `{#####}` draws on one counter shared by every pattern on the
+        site -- that is how Frappe's `format:` rule works, and it is what keeps
+        names unique. Numbers are therefore sequential but not per-form.
         """
-        field = (self.naming_field or "").strip()
-
-        if not field:
-            # Explicitly blank: leave whatever the DocType already has, so a
-            # naming rule set by hand in the desk is not overwritten.
+        pattern = (self.naming_pattern or "").strip()
+        if not pattern:
             return
 
-        if not any(df.fieldname == field for df in doctype_doc.fields):
+        # Frappe derives `naming_rule` from `autoname` itself; setting it here
+        # only risks disagreeing with what it decides.
+        doctype_doc.autoname = f"format:{pattern}"
+
+    #: Tokens Frappe's naming series understands on its own, so a pattern using
+    #: them is valid even though they are not fields on this form.
+    NAMING_TOKENS = frozenset(
+        {"YYYY", "YY", "MM", "DD", "JJJ", "WW", "timestamp"}
+    )
+
+    def validate_naming_pattern(self) -> None:
+        """
+        Catch a broken pattern while the form is being built.
+
+        Left unchecked, a typo only shows up when a visitor submits and the
+        record cannot be named -- by which time the submission has failed.
+        """
+        pattern = (self.naming_pattern or "").strip()
+        if not pattern:
             return
 
-        doctype_doc.autoname = f"field:{field}"
-        doctype_doc.naming_rule = "By fieldname"
-        # A readable title makes link fields and list views legible too.
-        if not doctype_doc.title_field:
-            doctype_doc.title_field = field
+        if pattern.count("{") != pattern.count("}"):
+            frappe.throw(
+                _("Record name pattern has an unclosed brace: {0}").format(pattern),
+                frappe.ValidationError,
+            )
+
+        tokens = re.findall(r"\{([^}]*)\}", pattern)
+        if not tokens:
+            frappe.throw(
+                _(
+                    "Record name pattern {0} has nothing variable in it, so every "
+                    "submission would want the same name. Add {1} for a counter."
+                ).format(pattern, "{#####}"),
+                frappe.ValidationError,
+            )
+
+        fieldnames = {f.fieldname for f in self.fields if f.fieldname}
+        for token in tokens:
+            if not token:
+                frappe.throw(_("Record name pattern has an empty {} placeholder."), frappe.ValidationError)
+            if set(token) == {"#"} or token in self.NAMING_TOKENS or token in fieldnames:
+                continue
+            frappe.throw(
+                _(
+                    "Record name pattern refers to {0}, which is neither a field on "
+                    "this form nor one of {1}."
+                ).format(f"{{{token}}}", ", ".join(sorted(self.NAMING_TOKENS))),
+                frappe.ValidationError,
+            )
 
     def validate(self) -> None:
+        self.validate_naming_pattern()
+
         # Access Mode is the control users actually see; login_required is what
         # the router enforces. Keeping them in step here stops a form reading
         # "Public" in the builder while bouncing visitors to /login.

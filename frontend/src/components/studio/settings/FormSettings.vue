@@ -15,28 +15,24 @@ const local = ref({
   access_mode: "Public" as "Public" | "Requires Login" | "Internal Only",
   record_strategy: "Create New" as "Create New" | "Update Existing" | "Collect Submission Only",
   create_target_fields: false,
-  naming_field: "",
+  naming_pattern: "",
   success_mode: "Designed Page" as "Designed Page" | "Redirect to External URL",
   login_required: false,
   allow_incomplete: false,
   success_redirect_url: "",
 });
 
-/**
- * Fields whose answer could name a record. Layout rows hold no value, and a
- * name has to be a single short value, so tables and attachments are out.
- */
+/** Placeholders for this form's own answers, to show beside the pattern box. */
 const NOT_NAMEABLE = new Set([
     "Heading 1", "Heading 2", "Heading 3", "Page Break",
-    "Table", "Multiselect", "Attach", "Textarea", "Text Editor",
+    "Table", "Multiselect", "Attach",
 ]);
 
-const namingFieldOptions = computed(() => [
-    { label: "Generated id (default)", value: "" },
-    ...(editFormStore.formData?.fields ?? [])
+const namingFieldTokens = computed(() =>
+    (editFormStore.formData?.fields ?? [])
         .filter((f: any) => f.fieldname && !NOT_NAMEABLE.has(f.fieldtype))
-        .map((f: any) => ({ label: `${f.label || f.fieldname}`, value: f.fieldname })),
-]);
+        .map((f: any) => `{${f.fieldname}}`)
+);
 
 const accessModeOptions = [
   { label: "Public", value: "Public" },
@@ -97,7 +93,7 @@ watch(
                     : "Public",
             record_strategy: data.record_strategy ?? "Create New",
             create_target_fields: Boolean(data.create_target_fields),
-            naming_field: data.naming_field ?? "",
+            naming_pattern: data.naming_pattern ?? "",
             success_mode: data.success_mode ?? "Designed Page",
             login_required: !!data.login_required,
             allow_incomplete: !!data.allow_incomplete,
@@ -357,19 +353,37 @@ ${scriptTag}`;
               />
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm text-ink-gray-6">Name Records By</label>
+              <label class="text-sm text-ink-gray-6">Record Name Pattern</label>
               <FormControl
-                type="select"
+                type="text"
                 variant="subtle"
                 size="sm"
-                :options="namingFieldOptions"
-                v-model="local.naming_field"
-                @update:modelValue="(v: string) => saveSetting('naming_field', v)"
+                placeholder="ENQ-{YYYY}-{#####}"
+                v-model="local.naming_pattern"
+                @change="saveSetting('naming_pattern', local.naming_pattern)"
               />
               <p class="text-xs text-ink-gray-5">
-                Each record is named after this answer, so the list reads properly instead
-                of showing generated ids. Leave as generated to keep system ids.
+                How each submission is named. Leave blank for a generated id.
+                <strong>Always include a counter</strong> such as
+                <code class="rounded bg-surface-gray-2 px-1">{#####}</code> — without one,
+                two people answering the same way would clash and the second submission
+                would fail.
               </p>
+              <div class="rounded bg-surface-gray-2 px-2 py-1.5 text-xs text-ink-gray-6">
+                <p class="mb-1">
+                  <code>{#####}</code> counter ·
+                  <code>{YYYY}</code> <code>{YY}</code> <code>{MM}</code>
+                  <code>{DD}</code> <code>{WW}</code> <code>{JJJ}</code> ·
+                  <code>{timestamp}</code>
+                </p>
+                <p v-if="namingFieldTokens.length">
+                  This form's answers:
+                  <code v-for="t in namingFieldTokens" :key="t" class="mr-1">{{ t }}</code>
+                </p>
+                <p class="mt-1 text-ink-gray-5">
+                  Example: <code>ENQ-{YYYY}-{MM}-{#####}</code> → ENQ-2026-09-00001
+                </p>
+              </div>
             </div>
             <div class="flex flex-col gap-2">
               <label class="text-sm text-ink-gray-6">Success Mode</label>
