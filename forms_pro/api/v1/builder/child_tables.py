@@ -176,54 +176,6 @@ def is_form_owned(doctype: str) -> bool:
 
 
 @frappe.whitelist()
-def search_child_tables(form_id: str, search: str = "", limit: int = 20) -> dict:
-    """
-    Child DocTypes a Table field can point at.
-
-    Building a table from scratch is not always what the author wants: the site
-    already has "Allowed To Transact With", "Party Account" and every table a
-    previous form generated, and reusing one keeps the answers in the place the
-    rest of ERPNext already reads them from.
-
-    A table the form does not own comes back with `editable: False`, because its
-    columns are shared by every record on the site -- the author picks it as it
-    is, rather than reshaping it for one form.
-    """
-    if not frappe.has_permission("Form", "write", form_id):
-        frappe.throw(_("You do not have write access to this form"), frappe.PermissionError)
-
-    filters = {"istable": 1}
-    if (search or "").strip():
-        filters["name"] = ["like", f"%{search.strip()}%"]
-
-    tables = frappe.get_all(
-        "DocType",
-        filters=filters,
-        fields=["name", "module"],
-        order_by="modified desc",
-        limit_page_length=frappe.utils.cint(limit) or 20,
-    )
-
-    return {
-        "tables": [
-            {
-                "name": table.name,
-                "module": table.module,
-                "editable": table.module == MODULE,
-                "column_count": len(
-                    [
-                        df
-                        for df in frappe.get_meta(table.name).fields
-                        if df.fieldtype not in UNSUPPORTED_FRAPPE_FIELDTYPES
-                    ]
-                ),
-            }
-            for table in tables
-        ]
-    }
-
-
-@frappe.whitelist()
 def get_child_table_columns(doctype: str) -> dict:
     if not doctype or not frappe.db.exists("DocType", doctype):
         return {"doctype": doctype, "columns": [], "editable": False}
