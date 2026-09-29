@@ -29,7 +29,10 @@ const props = defineProps({
 const value = defineModel();
 const fieldRef = computed(() => props.field);
 const { options: loadedOptions } = useFieldOptions(fieldRef);
-const resolvedOptions = computed(() => props.options ?? loadedOptions.value);
+// `?? []` rather than `?? null`: a select handed null options throws while
+// registering them, which takes the whole form down instead of showing an
+// empty dropdown.
+const resolvedOptions = computed(() => props.options ?? loadedOptions.value ?? []);
 
 const getComponent = computed(() => {
     return formFields.find(

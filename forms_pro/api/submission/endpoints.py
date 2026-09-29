@@ -212,6 +212,42 @@ def _get_governed_fieldnames(separator_fieldname: str, fields: list, trigger_fie
     return fields_in_section
 
 
+#: How much text each Frappe column type can actually hold. A Data column is
+#: varchar(140); Text is a 64KB TEXT. Going over does not fail politely -- it
+#: reaches MySQL, which answers "Data too long for column", and the visitor
+#: gets a 500 with no idea which answer was too long.
+_COLUMN_LIMITS = {
+    "Data": 140,
+    "Link": 140,
+    "Select": 140,
+    "Password": 140,
+    "Phone": 140,
+    "Read Only": 140,
+    "Small Text": 65535,
+    "Text": 65535,
+}
+
+
+def _length_error(form_field, target_meta, value) -> str | None:
+    """Whether this answer is too long for the column it is headed for."""
+    if value in (None, "") or not isinstance(value, str):
+        return None
+
+    target = getattr(form_field, "target_field", None) or form_field.fieldname
+    column = target_meta.get_field(target) if target_meta else None
+    if not column:
+        return None
+
+    limit = _COLUMN_LIMITS.get(column.fieldtype)
+    # MySQL counts bytes, not characters, so an accented or non-Latin answer
+    # can exceed the column while looking short enough.
+    if limit and len(value.encode("utf-8")) > limit:
+        return _("{0} is too long. Please keep it to {1} characters or fewer.").format(
+            form_field.label or form_field.fieldname, limit
+        )
+    return None
+
+
 def _validate_form_response(form: "Form", form_data: dict) -> None:
     """
     Validate required and conditionally-required fields server-side.
@@ -222,6 +258,14 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
     """
     field_map = {f.fieldname: f for f in form.fields}
     errors: list[str] = []
+    # `getattr`, not attribute access: this runs against a form stub in tests
+    # and against forms that have no target at all.
+    target_doctype = getattr(form, "target_doctype", None)
+    target_meta = (
+        frappe.get_meta(target_doctype)
+        if target_doctype and frappe.db.exists("DocType", target_doctype)
+        else None
+    )
 
     for field in form.fields:
         if field.fieldtype in _DISPLAY_ONLY_FIELDTYPES:
@@ -287,7 +331,7 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
             errors.append(_("{0} is required").format(field.label))
             continue
 
-        problem = _format_error(field, value)
+        problem = _format_error(field, value) or _length_error(field, target_meta, value)
         if problem:
             errors.append(problem)
 
@@ -350,8 +394,59 @@ def submit_form_response(
         result = processor.process()
 
         return result["submission_id"]
-    except Exception:
+    except frappe.LinkValidationError as exc:
+        # A subclass of ValidationError, so it has to be caught first. Its own
+        # wording names the DocType and the missing id, which means nothing to
+        # someone who picked from a dropdown.
+        _rethrow_for_the_visitor(exc, form_id)
+    except frappe.ValidationError:
+        # Already phrased for the visitor; let it through untouched.
         raise
+    except Exception as exc:
+        _rethrow_for_the_visitor(exc, form_id)
+
+
+#: Failures that come from the database or from the target DocType's own rules
+#: rather than from anything the visitor can see. Each used to travel to the
+#: browser as a 500 carrying only a class name -- "OperationalError" -- which
+#: told the person filling the form nothing and left no Error Log entry when
+#: the database itself was the thing that failed.
+_RETRYABLE_DB_ERRORS = ("1205", "1213", "2006", "2013", "1040")
+
+
+def _rethrow_for_the_visitor(exc: Exception, form_id: str) -> None:
+    """Report a submission failure in terms the person filling the form can use."""
+    text = str(exc)
+    name = type(exc).__name__
+
+    frappe.log_error(
+        title=f"Forms Pro: submission failed for {form_id}",
+        message=frappe.get_traceback(with_context=True),
+    )
+
+    if any(code in text for code in _RETRYABLE_DB_ERRORS):
+        # A lock timeout, a deadlock or a dropped connection: the transaction is
+        # already rolled back, so nothing was half-saved and trying again is
+        # safe. Deliberately not retried here -- a second automatic attempt is
+        # how one click becomes two records.
+        frappe.throw(
+            _("The server was busy and could not save your response. Please submit again."),
+            frappe.ValidationError,
+        )
+
+    if "1406" in text or name in ("DataError", "CharacterLengthExceededError"):
+        frappe.throw(
+            _("One of your answers is longer than this form can store. Please shorten it."),
+            frappe.ValidationError,
+        )
+
+    if name == "LinkValidationError":
+        frappe.throw(
+            _("One of your selections is no longer available. Please re-pick it and submit again."),
+            frappe.ValidationError,
+        )
+
+    raise exc
 
 
 @frappe.whitelist()

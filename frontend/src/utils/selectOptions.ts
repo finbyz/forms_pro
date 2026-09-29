@@ -37,8 +37,15 @@ export async function getFieldOptions(
         page_length: 999,
       }),
     });
-    await resource.fetch();
-    return resource.data as string[] | SelectOption[];
+    try {
+      await resource.fetch();
+    } catch {
+      // A refused or failed lookup leaves the field with nothing to offer,
+      // which is bad enough on its own -- it must not also take the page down
+      // by rejecting inside the watcher that called this.
+      return [];
+    }
+    return (resource.data ?? []) as string[] | SelectOption[];
   }
 
   return field.options;
@@ -51,14 +58,23 @@ export async function getFieldOptions(
 export function useFieldOptions(
   field: Ref<FieldForOptions> | ComputedRef<FieldForOptions>
 ) {
-  const options = ref<string[] | SelectOption[] | null>(null);
+  // Always a list, never null. frappe-ui's select registers each option and
+  // reads `.value` off it, so a null list -- or a null entry inside one --
+  // crashes the whole page with "Cannot read properties of null".
+  const options = ref<string[] | SelectOption[]>([]);
 
   const load = async () => {
-    const result = await getFieldOptions(field.value);
-    options.value =
-      result === "" || result === undefined
-        ? null
-        : (result as string[] | SelectOption[]);
+    let result: unknown = [];
+    try {
+      result = await getFieldOptions(field.value);
+    } catch {
+      result = [];
+    }
+    options.value = Array.isArray(result)
+      ? (result.filter((option) => option !== null && option !== undefined) as
+          | string[]
+          | SelectOption[])
+      : [];
   };
 
   watch(
