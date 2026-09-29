@@ -311,13 +311,26 @@ ${scriptTag}`;
           </div>
           <div class="space-y-4">
             <div class="flex flex-col gap-2 pt-1">
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between gap-2">
                 <label class="text-sm text-ink-gray-6">Target DocType</label>
-                <Badge
-                  variant="subtle"
-                  :label="form.target_doctype || 'Not set'"
-                  :theme="form.target_doctype ? 'blue' : 'orange'"
-                />
+                <div class="flex items-center gap-1.5">
+                  <!--
+                    Whether the form generated this DocType or was pointed at
+                    one the site already had. It decides what the form is
+                    allowed to change, so it belongs next to the name.
+                  -->
+                  <Badge
+                    v-if="form.target_doctype"
+                    variant="subtle"
+                    :theme="form.owns_target_doctype ? 'blue' : 'orange'"
+                    :label="form.owns_target_doctype ? 'Created by this form' : 'Existing DocType'"
+                  />
+                  <Badge
+                    variant="subtle"
+                    :label="form.target_doctype || 'Not set'"
+                    :theme="form.target_doctype ? 'blue' : 'orange'"
+                  />
+                </div>
               </div>
               <FormControl
                 type="autocomplete"

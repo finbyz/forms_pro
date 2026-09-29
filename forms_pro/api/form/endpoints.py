@@ -104,6 +104,16 @@ def get_form(form_id: str) -> dict:
         "is_published": form.is_published,
         "allow_incomplete": form.allow_incomplete,
         "target_doctype": form.target_doctype,
+        # Whether this form generated its own DocType or was pointed at one the
+        # site already had. The builder says so plainly, because what is safe to
+        # change differs entirely between the two: a generated DocType belongs
+        # to the form, while Contact or Supplier is shared with the whole site.
+        "target_doctype_module": (
+            frappe.db.get_value("DocType", form.target_doctype, "module")
+            if form.target_doctype and frappe.db.exists("DocType", form.target_doctype)
+            else None
+        ),
+        "owns_target_doctype": bool(form.owns_target_doctype()),
         "success_title": form.success_title,
         "success_description": form.success_description,
         # The Design and Success tabs write these; without them in the payload

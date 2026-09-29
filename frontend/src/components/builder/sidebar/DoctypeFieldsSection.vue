@@ -5,7 +5,7 @@ import { ref, computed, watch } from "vue";
 import type { Component } from "vue";
 import type { FormField } from "@/types/formfield";
 import { toast } from "vue-sonner";
-import { createResource } from "frappe-ui";
+import { Badge, createResource } from "frappe-ui";
 import { writeDragPayload } from "@/utils/canvasDropTarget";
 
 const editFormStore = useEditForm();
@@ -35,6 +35,10 @@ const draggableFields = ref<FormField[]>([]);
 watch(filteredFields, (v) => (draggableFields.value = [...v]), { immediate: true });
 
 const hasDoctype = computed(() => !!editFormStore.formData?.target_doctype);
+
+/** True when this form generated its target DocType, rather than being pointed at one. */
+const ownsDoctype = computed(() => Boolean(editFormStore.formData?.owns_target_doctype));
+const targetModule = computed(() => editFormStore.formData?.target_doctype_module ?? "");
 
 // Mandatory DocType fields the form does not map yet.
 const missingRequired = computed(() => {
@@ -112,6 +116,45 @@ function addAllRequired() {
         </div>
 
         <template v-if="hasDoctype">
+            <!--
+                Which DocType this form writes to, and whether it is one the
+                form made or one the site already had. The distinction decides
+                what is safe to change: a generated DocType belongs to this
+                form alone, while Supplier or Contact is shared with everything
+                else on the site.
+            -->
+            <div class="rounded-lg border border-outline-gray-1 bg-surface-gray-1 px-3 py-2.5">
+                <p class="text-[10px] font-semibold uppercase tracking-wider text-ink-gray-5">
+                    Writes to
+                </p>
+                <p
+                    class="mt-0.5 text-sm font-medium text-ink-gray-8 truncate"
+                    :title="editFormStore.formData?.target_doctype"
+                >
+                    {{ editFormStore.formData?.target_doctype }}
+                </p>
+                <div class="mt-1.5 flex items-center gap-1.5">
+                    <Badge
+                        :theme="ownsDoctype ? 'blue' : 'orange'"
+                        variant="subtle"
+                        size="sm"
+                        :label="ownsDoctype ? 'Created by this form' : 'Existing DocType'"
+                    />
+                    <span v-if="targetModule" class="text-xs text-ink-gray-5 truncate">
+                        {{ targetModule }}
+                    </span>
+                </div>
+                <p class="mt-1.5 text-xs text-ink-gray-5">
+                    <template v-if="ownsDoctype">
+                        Fields you add here become columns on it.
+                    </template>
+                    <template v-else>
+                        Shared with the rest of the site, so the form never changes its
+                        fields.
+                    </template>
+                </p>
+            </div>
+
             <FormControl
                 v-model="search"
                 type="search"
