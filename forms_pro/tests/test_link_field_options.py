@@ -11,7 +11,7 @@ else is refused.
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from forms_pro.api.form.endpoints import get_link_field_options
+from forms_pro.api.form.endpoints import get_doctype_fields, get_link_field_options
 from forms_pro.tests.factories.form_factory import FormFactory
 
 
@@ -121,4 +121,64 @@ class TestLinkFieldOptions(FrappeTestCase):
         self.assertLessEqual(
             len(get_link_field_options(doctype="Language", page_length=100000)),
             100,
+        )
+
+
+class TestGuestTableColumns(FrappeTestCase):
+    """
+    Linking an existing table means its schema is the whole configuration, so a
+    visitor has to be able to read that schema and look up its Link columns --
+    and nothing else. Scoping this to the form's own fields left every dropdown
+    inside a table row empty.
+    """
+
+    CHILD = "Contact Email"
+
+    def setUp(self):
+        self.form = FormFactory.create()
+        self.form.append(
+            "fields",
+            {
+                "label": "Emails",
+                "fieldname": "email_rows",
+                "fieldtype": "Table",
+                "options": self.CHILD,
+            },
+        )
+        self.form.is_published = 1
+        self.form.access_mode = "Public"
+        self.form.save(ignore_permissions=True)
+        self.addCleanup(frappe.set_user, "Administrator")
+        self.addCleanup(
+            frappe.delete_doc, "Form", self.form.name, force=True, ignore_permissions=True
+        )
+
+    def test_a_guest_can_read_the_schema_of_a_table_the_form_uses(self):
+        frappe.set_user("Guest")
+        self.assertTrue(get_doctype_fields(doctype=self.CHILD))
+
+    def test_a_guest_cannot_read_the_schema_of_anything_else(self):
+        frappe.set_user("Guest")
+        with self.assertRaises(frappe.PermissionError):
+            get_doctype_fields(doctype="User")
+
+    def test_a_guest_can_resolve_a_link_column_inside_that_table(self):
+        link_targets = {
+            df.options
+            for df in frappe.get_meta(self.CHILD).fields
+            if df.fieldtype == "Link" and df.options
+        }
+        if not link_targets:
+            self.skipTest(f"{self.CHILD} has no Link column to resolve")
+
+        frappe.set_user("Guest")
+        for target in link_targets:
+            # Must not raise: the row cannot be filled in without these.
+            get_link_field_options(doctype=target, page_length=3)
+
+    def test_nested_tables_and_hidden_columns_are_left_out(self):
+        columns = get_doctype_fields(doctype=self.CHILD)
+        self.assertFalse(
+            [c for c in columns if c.fieldtype == "Table" or c.hidden],
+            "a nested table has no renderer and a hidden column is not the visitor's to fill",
         )

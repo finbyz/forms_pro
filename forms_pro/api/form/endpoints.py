@@ -232,31 +232,61 @@ def get_form_for_edit(form_id: str) -> dict:
 _MAX_LINK_OPTIONS = 100
 
 
-def _doctype_is_offered_by_a_public_form(doctype: str) -> bool:
+def _public_form_field_options(fieldtypes: tuple[str, ...]) -> set[str]:
+    """The `options` of the given field types across published, guest-facing forms."""
+    rows = frappe.db.sql(
+        """
+        SELECT DISTINCT ff.options
+        FROM `tabForm Field` ff
+        INNER JOIN `tabForm` f ON f.name = ff.parent
+        WHERE ff.parenttype = 'Form'
+          AND ff.fieldtype IN %(fieldtypes)s
+          AND ff.hidden = 0
+          AND f.is_published = 1
+          AND f.login_required = 0
+        """,
+        {"fieldtypes": fieldtypes},
+    )
+    return {row[0] for row in rows if row[0]}
+
+
+def guest_visible_child_tables() -> set[str]:
+    """Child DocTypes a published, guest-facing form asks visitors to fill in."""
+    return _public_form_field_options(("Table",))
+
+
+def _guest_readable_link_targets() -> set[str]:
     """
-    Whether a visitor is genuinely being asked to choose from this DocType.
+    Every DocType a visitor is genuinely being asked to choose from.
 
     A public form with a "Company" Link field has to show company names -- that
-    is the field doing its job. Anything else is not the visitor's business,
-    and the doctype arrives from the browser, so it cannot be taken on trust.
+    is the field doing its job. So does a Company column *inside* a table on
+    that form: the row cannot be filled in without it, and restricting this to
+    the form's own fields left those dropdowns empty.
+
+    Anything else is not the visitor's business, and the DocType arrives from
+    the browser, so it cannot be taken on trust.
     """
-    return bool(
-        frappe.db.sql(
-            """
-            SELECT 1
-            FROM `tabForm Field` ff
-            INNER JOIN `tabForm` f ON f.name = ff.parent
-            WHERE ff.parenttype = 'Form'
-              AND ff.fieldtype = 'Link'
-              AND ff.options = %(doctype)s
-              AND ff.hidden = 0
-              AND f.is_published = 1
-              AND f.login_required = 0
-            LIMIT 1
-            """,
-            {"doctype": doctype},
-        )
-    )
+    targets = _public_form_field_options(("Link", "Language"))
+
+    for child in guest_visible_child_tables():
+        if not frappe.db.exists("DocType", child):
+            continue
+        for df in frappe.get_meta(child).fields:
+            if df.fieldtype in ("Link", "Table MultiSelect") and df.options:
+                targets.add(df.options)
+                # A Table MultiSelect stores its choices in a child table of
+                # its own, whose single Link column names the real DocType.
+                if df.fieldtype == "Table MultiSelect" and frappe.db.exists("DocType", df.options):
+                    for inner in frappe.get_meta(df.options).fields:
+                        if inner.fieldtype == "Link" and inner.options:
+                            targets.add(inner.options)
+
+    return targets
+
+
+def _doctype_is_offered_by_a_public_form(doctype: str) -> bool:
+    return doctype in _guest_readable_link_targets()
 
 
 @frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
@@ -458,14 +488,33 @@ def get_doctype_list() -> list[str]:
 
 @frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
 def get_doctype_fields(doctype: str = "") -> list:
+    """
+    The fields of a DocType, for the builder and for rendering table rows.
+
+    Guests reach this because a Table field on a public form draws its columns
+    from the child DocType's own schema -- that is what makes linking an
+    existing table work without any per-form configuration. They get *only*
+    those child tables: the endpoint used to hand anyone the full schema of any
+    DocType on the site, `User` and `Salary Slip` included.
+    """
     if not doctype or not frappe.db.exists("DocType", doctype):
         return []
+
+    if frappe.session.user == "Guest" and doctype not in guest_visible_child_tables():
+        frappe.throw(
+            _("You are not permitted to read {0}.").format(doctype),
+            frappe.PermissionError,
+        )
+
     doc = frappe.get_doc("DocType", doctype)
     fields = [
         field
         for field in doc.fields
+        # A nested table has no renderer, and a hidden column is not the
+        # visitor's to fill in.
         if field.fieldtype not in UNSUPPORTED_FRAPPE_FIELDTYPES
         and field.fieldname not in FORMS_PRO_SYSTEM_FIELDNAMES
+        and not (doc.istable and (field.fieldtype == "Table" or field.hidden))
     ]
     return fields
 

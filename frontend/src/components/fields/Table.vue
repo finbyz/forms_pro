@@ -26,18 +26,40 @@ const columnResource = useCall({
     immediate: false,
 });
 
+/**
+ * The columns to draw, straight from the linked child DocType.
+ *
+ * Linking an existing table means its schema *is* the configuration: whatever
+ * columns it has -- Link, Select, Currency, Table MultiSelect -- show up here
+ * with no per-form setup. Three things were getting lost on the way:
+ *
+ *  - `options` was not passed to the mapper, so a Data column marked Email or
+ *    Phone came through as a plain text box, and a Link column had nothing to
+ *    look up.
+ *  - an unmapped type fell back to "Data", drawing a text box for something
+ *    that is not text.
+ *  - `read_only` was dropped, so a column the record computes for itself
+ *    looked editable.
+ */
 const columns = computed(() => {
     if (!props.doctype) return [];
     const data = columnResource.data;
     if (!Array.isArray(data)) {
         return [];
     }
-    return data.map((column: any) => ({
-        label: column.label,
-        key: column.fieldname,
-        ...column,
-        fieldtype: mapDoctypeFieldForForm(column.fieldtype) ?? "Data",
-    }));
+    return data
+        .map((column: any) => {
+            const fieldtype = mapDoctypeFieldForForm(column.fieldtype, column.options);
+            if (!fieldtype) return null;
+            return {
+                ...column,
+                label: column.label,
+                key: column.fieldname,
+                fieldtype,
+                read_only: column.read_only ? 1 : 0,
+            };
+        })
+        .filter((column: any): column is Record<string, any> => column !== null);
 });
 
 watch(
@@ -106,6 +128,7 @@ function updateCell(rowIndex: number, key: string, value: unknown) {
                 @update:model-value="updateCell(index, column.key, $event)"
                 :field="column"
                 :in-edit-mode="false"
+                :disabled="Boolean(column.read_only)"
             />
         </div>
     </div>
