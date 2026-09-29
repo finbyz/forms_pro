@@ -182,3 +182,38 @@ class TestGuestTableColumns(FrappeTestCase):
             [c for c in columns if c.fieldtype == "Table" or c.hidden],
             "a nested table has no renderer and a hidden column is not the visitor's to fill",
         )
+
+
+class TestUnpublishedFormRoute(FrappeTestCase):
+    """
+    A visitor must not be able to open a form that is not published. The page
+    used to load and accept input, and only the submit was refused.
+    """
+
+    def setUp(self):
+        self.form = FormFactory.create()
+        self.addCleanup(frappe.set_user, "Administrator")
+        self.addCleanup(
+            frappe.delete_doc, "Form", self.form.name, force=True, ignore_permissions=True
+        )
+
+    def _route(self):
+        return frappe.db.get_value("Form", self.form.name, "route")
+
+    def test_an_unpublished_form_is_not_found(self):
+        from forms_pro.api.form.endpoints import get_form_by_route
+
+        self.form.is_published = 0
+        self.form.save(ignore_permissions=True)
+        frappe.set_user("Guest")
+        with self.assertRaises(frappe.DoesNotExistError):
+            get_form_by_route(route=self._route())
+
+    def test_a_published_form_is_served(self):
+        from forms_pro.api.form.endpoints import get_form_by_route
+
+        self.form.is_published = 1
+        self.form.access_mode = "Public"
+        self.form.save(ignore_permissions=True)
+        frappe.set_user("Guest")
+        self.assertEqual(get_form_by_route(route=self._route())["name"], self.form.name)

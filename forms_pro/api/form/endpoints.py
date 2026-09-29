@@ -44,6 +44,16 @@ def get_form_by_route(route: str) -> dict:
     if not form_id:
         frappe.throw(_("Form not found"), frappe.DoesNotExistError)
 
+    # An unpublished or archived form is not there as far as a visitor is
+    # concerned. This used to serve it anyway -- the page loaded and could be
+    # filled in, and only the submit was refused -- so "Open live form" on a
+    # draft, or an old link to a withdrawn form, looked like a working form.
+    # Answering exactly as for a route that never existed also avoids telling
+    # anyone the form is there at all.
+    is_published, status = frappe.db.get_value("Form", form_id, ["is_published", "status"])
+    if not is_published or status == "Archived":
+        frappe.throw(_("Form not found"), frappe.DoesNotExistError)
+
     payload = get_form(form_id)
 
     active_version = payload.get("active_version")
