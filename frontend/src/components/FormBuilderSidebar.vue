@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import AddFieldsSection from "@/components/builder/sidebar/AddFieldsSection.vue";
-import SettingsSection from "@/components/builder/sidebar/SettingsSection.vue";
 import DocTypeFieldsSection from "@/components/builder/sidebar/DoctypeFieldsSection.vue";
 
 const sidebarSections = [
@@ -15,11 +14,13 @@ const sidebarSections = [
         label: "DocType",
         section: DocTypeFieldsSection,
     },
-    {
-        id: "settings",
-        label: "Logic",
-        section: SettingsSection,
-    }
+    // There was a third tab here, labelled "Logic" but showing form settings:
+    // the route, Login Required, Allow Incomplete and the thank-you message.
+    // Every one of those is on the Settings tab at the top, where the route
+    // also gets checked for format and uniqueness -- which the sidebar copy
+    // did not do. Worse, the two wrote `login_required` by different rules, so
+    // whichever was touched last won. The thank-you message was the one thing
+    // only here; it now sits with the rest of the success settings.
 ];
 
 const activeSection = ref(

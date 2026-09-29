@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, defineAsyncComponent } from "vue";
 import { Button, FormControl, Badge, createResource } from "frappe-ui";
+
+// Same reason as everywhere else: keep ProseMirror out of the eager graph.
+const TextEditor = defineAsyncComponent(() => import("@/components/fields/TextEditor.vue"));
 import { useEditForm } from "@/stores/editForm";
 import { validateFormRoute } from "@/utils/form_generator";
 import { toast } from "vue-sonner";
@@ -16,6 +19,8 @@ const local = ref({
   record_strategy: "Create New" as "Create New" | "Update Existing" | "Collect Submission Only",
   create_target_fields: false,
   naming_pattern: "",
+  success_title: "",
+  success_description: "",
   success_mode: "Designed Page" as "Designed Page" | "Redirect to External URL",
   login_required: false,
   allow_incomplete: false,
@@ -94,6 +99,8 @@ watch(
             record_strategy: data.record_strategy ?? "Create New",
             create_target_fields: Boolean(data.create_target_fields),
             naming_pattern: data.naming_pattern ?? "",
+            success_title: data.success_title ?? "",
+            success_description: data.success_description ?? "",
             success_mode: data.success_mode ?? "Designed Page",
             login_required: !!data.login_required,
             allow_incomplete: !!data.allow_incomplete,
@@ -377,6 +384,49 @@ ${scriptTag}`;
                 @update:modelValue="updateSuccessMode"
               />
             </div>
+          </div>
+        </section>
+
+        <!-- Thank-you message (conditional) -->
+        <section
+          v-if="local.success_mode === 'Designed Page'"
+          class="bg-surface-base rounded-6 border border-outline-gray-1 p-5"
+        >
+          <div class="flex items-center gap-2 mb-5">
+            <lucide-message-square class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
+            <h3 class="text-base-semibold text-ink-gray-8">Thank-you Message</h3>
+          </div>
+          <div class="space-y-4">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm text-ink-gray-6">Title</label>
+              <FormControl
+                type="text"
+                variant="subtle"
+                size="sm"
+                placeholder="Thanks for getting in touch"
+                v-model="local.success_title"
+                @change="saveSetting('success_title', local.success_title)"
+              />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm text-ink-gray-6">Description</label>
+              <TextEditor
+                variant="outline"
+                :content="local.success_description"
+                editor-class="bg-surface-white w-full rounded-b form-description border rounded-b min-h-24"
+                placeholder="Tell them what happens next"
+                :bubble-menu="true"
+                @change="
+                  (value: string) => {
+                    local.success_description = value;
+                    saveSetting('success_description', value);
+                  }
+                "
+              />
+            </div>
+            <p class="text-xs text-ink-gray-5">
+              Shown on the success page after a visitor submits.
+            </p>
           </div>
         </section>
 
