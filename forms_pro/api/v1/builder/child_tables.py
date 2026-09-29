@@ -119,6 +119,47 @@ def create_child_table(form_id: str, field_label: str | None = None) -> dict:
     return {"doctype": name, "columns": get_child_table_columns(name)["columns"]}
 
 
+#: How a stored column comes back to the builder.
+#:
+#: `FORM_TO_FRAPPE_FIELDTYPE` is lossy: Textarea is stored as Text, Number as
+#: Int, Time Picker as Time, Checkbox as Check. Handing those raw names back to
+#: the builder put a value in the type dropdown that is not one of its options,
+#: and posting it again was refused -- "Column type Text is not supported" --
+#: so a table containing a Textarea could never be saved a second time.
+#:
+#: Written out rather than inverted, because several form types share one
+#: Frappe type (Check is both Checkbox and Switch) and the choice of which one
+#: comes back has to be deliberate.
+_FRAPPE_TO_FORM_COLUMN_TYPE = {
+    "Data": "Data",
+    "Int": "Number",
+    "Float": "Number",
+    "Currency": "Currency",
+    "Date": "Date",
+    "Datetime": "Date Time",
+    "Time": "Time Picker",
+    "Select": "Select",
+    "Check": "Checkbox",
+    "Text": "Textarea",
+    "Small Text": "Textarea",
+    "Long Text": "Textarea",
+    "Link": "Link",
+    "Phone": "Phone",
+    "Attach": "Attach",
+    "Attach Image": "Attach",
+}
+
+
+def form_column_type(fieldtype: str, options: str | None = None) -> str:
+    """The name the builder's type dropdown uses for a stored column."""
+    # Frappe marks an email or a URL as a Data column with `options` naming the
+    # semantic, so the options decide before the fieldtype does.
+    semantic = (options or "").strip()
+    if fieldtype == "Data" and semantic in ("Email", "URL"):
+        return semantic
+    return _FRAPPE_TO_FORM_COLUMN_TYPE.get(fieldtype, "Data")
+
+
 def is_form_owned(doctype: str) -> bool:
     """
     Whether the builder may rewrite this child table's columns.
@@ -135,13 +176,67 @@ def is_form_owned(doctype: str) -> bool:
 
 
 @frappe.whitelist()
+def search_child_tables(form_id: str, search: str = "", limit: int = 20) -> dict:
+    """
+    Child DocTypes a Table field can point at.
+
+    Building a table from scratch is not always what the author wants: the site
+    already has "Allowed To Transact With", "Party Account" and every table a
+    previous form generated, and reusing one keeps the answers in the place the
+    rest of ERPNext already reads them from.
+
+    A table the form does not own comes back with `editable: False`, because its
+    columns are shared by every record on the site -- the author picks it as it
+    is, rather than reshaping it for one form.
+    """
+    if not frappe.has_permission("Form", "write", form_id):
+        frappe.throw(_("You do not have write access to this form"), frappe.PermissionError)
+
+    filters = {"istable": 1}
+    if (search or "").strip():
+        filters["name"] = ["like", f"%{search.strip()}%"]
+
+    tables = frappe.get_all(
+        "DocType",
+        filters=filters,
+        fields=["name", "module"],
+        order_by="modified desc",
+        limit_page_length=frappe.utils.cint(limit) or 20,
+    )
+
+    return {
+        "tables": [
+            {
+                "name": table.name,
+                "module": table.module,
+                "editable": table.module == MODULE,
+                "column_count": len(
+                    [
+                        df
+                        for df in frappe.get_meta(table.name).fields
+                        if df.fieldtype not in UNSUPPORTED_FRAPPE_FIELDTYPES
+                    ]
+                ),
+            }
+            for table in tables
+        ]
+    }
+
+
+@frappe.whitelist()
 def get_child_table_columns(doctype: str) -> dict:
     if not doctype or not frappe.db.exists("DocType", doctype):
         return {"doctype": doctype, "columns": [], "editable": False}
 
     meta = frappe.get_meta(doctype)
     columns = [
-        {"label": f.label, "fieldname": f.fieldname, "fieldtype": f.fieldtype, "reqd": f.reqd}
+        {
+            "label": f.label,
+            "fieldname": f.fieldname,
+            "fieldtype": form_column_type(f.fieldtype, f.options),
+            "options": f.options,
+            "reqd": f.reqd,
+        }
         for f in meta.fields
         if f.fieldtype not in UNSUPPORTED_FRAPPE_FIELDTYPES
     ]
@@ -181,7 +276,11 @@ def set_child_table_columns(doctype: str, columns: list[dict]) -> dict:
             continue
         form_type = col.get("fieldtype") or "Data"
         if form_type not in ALLOWED_COLUMN_TYPES:
-            frappe.throw(_("Column type {0} is not supported").format(form_type))
+            # A column saved before the round-trip was fixed comes back naming
+            # its Frappe type; translate rather than refuse the whole table.
+            form_type = form_column_type(form_type, col.get("options"))
+        if form_type not in ALLOWED_COLUMN_TYPES:
+            frappe.throw(_("Column type {0} is not supported").format(col.get("fieldtype")))
 
         mapping = FORM_TO_FRAPPE_FIELDTYPE.get(form_type, {"fieldtype": "Data"})
         fieldname = _safe_fieldname(label, seen)
