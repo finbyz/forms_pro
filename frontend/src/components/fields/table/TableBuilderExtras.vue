@@ -35,12 +35,19 @@ const COLUMN_TYPES = [
 const columns = ref<Column[]>([]);
 const busy = ref(false);
 
+// A Table field can point at a child DocType the form created, or at one that
+// belongs to an app -- "Allowed To Transact With" on Supplier is ERPNext's, and
+// its columns are shared by every supplier on the site. Only the first kind is
+// ours to edit; the server decides and says so here.
+const editable = ref(false);
+
 // A Table field stores its backing child DocType in `options`.
 const childDoctype = computed(() => props.field.options || "");
 
 async function loadColumns() {
     if (!childDoctype.value) {
         columns.value = [];
+        editable.value = false;
         return;
     }
     const res = createResource({
@@ -48,6 +55,7 @@ async function loadColumns() {
         params: { doctype: childDoctype.value },
     });
     await res.fetch();
+    editable.value = Boolean(res.data?.editable);
     columns.value = (res.data?.columns ?? []).map((c: Column) => ({
         label: c.label,
         fieldtype: c.fieldtype,
@@ -113,6 +121,10 @@ async function saveColumns() {
         });
         await res.fetch();
         columns.value = res.data?.columns ?? cleaned;
+        // Columns are stored on the child DocType, not on the form, so nothing
+        // the form watches changed. Without this the author saw no "Saving..."
+        // and no "Publish changes" until they edited something unrelated.
+        await editFormStore.refreshPublishState();
         toast.success("Columns saved");
     } catch (e: any) {
         toast.error("Could not save columns", { description: e?.message });
@@ -148,50 +160,69 @@ async function saveColumns() {
                 <span class="font-medium text-ink-gray-7">{{ childDoctype }}</span>
             </span>
 
-            <div v-for="(col, i) in columns" :key="i" class="flex items-end gap-1.5">
-                <FormControl
-                    v-model="col.label"
-                    type="text"
-                    size="sm"
-                    variant="outline"
-                    placeholder="Column name"
-                    class="flex-1 min-w-0"
-                />
-                <FormControl
-                    v-model="col.fieldtype"
-                    type="select"
-                    size="sm"
-                    variant="outline"
-                    :options="COLUMN_TYPES"
-                    class="w-28 shrink-0"
-                />
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    theme="red"
-                    aria-label="Remove column"
-                    @click="removeColumn(i)"
-                >
-                    <Trash2 class="w-4 h-4" aria-hidden="true" />
-                </Button>
-            </div>
+            <template v-if="editable">
+                <div v-for="(col, i) in columns" :key="i" class="flex items-end gap-1.5">
+                    <FormControl
+                        v-model="col.label"
+                        type="text"
+                        size="sm"
+                        variant="outline"
+                        placeholder="Column name"
+                        class="flex-1 min-w-0"
+                    />
+                    <FormControl
+                        v-model="col.fieldtype"
+                        type="select"
+                        size="sm"
+                        variant="outline"
+                        :options="COLUMN_TYPES"
+                        class="w-28 shrink-0"
+                    />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        theme="red"
+                        aria-label="Remove column"
+                        @click="removeColumn(i)"
+                    >
+                        <Trash2 class="w-4 h-4" aria-hidden="true" />
+                    </Button>
+                </div>
 
-            <div class="flex gap-2">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    icon-left="plus"
-                    label="Add column"
-                    @click="addColumn"
-                />
-                <Button
-                    variant="subtle"
-                    size="sm"
-                    :loading="busy"
-                    label="Save columns"
-                    @click="saveColumns"
-                />
-            </div>
+                <div class="flex gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        icon-left="plus"
+                        label="Add column"
+                        @click="addColumn"
+                    />
+                    <Button
+                        variant="subtle"
+                        size="sm"
+                        :loading="busy"
+                        label="Save columns"
+                        @click="saveColumns"
+                    />
+                </div>
+            </template>
+
+            <template v-else>
+                <ul class="flex flex-col gap-1">
+                    <li
+                        v-for="col in columns"
+                        :key="col.fieldname"
+                        class="flex items-center justify-between gap-2 rounded border border-outline-gray-1 bg-surface-gray-1 px-2 py-1.5"
+                    >
+                        <span class="text-xs text-ink-gray-7 truncate">{{ col.label }}</span>
+                        <span class="text-xs text-ink-gray-5 shrink-0">{{ col.fieldtype }}</span>
+                    </li>
+                </ul>
+                <p class="text-xs text-ink-gray-5">
+                    This table belongs to another app and is shared across the site, so its
+                    columns are fixed here. Change them in ERPNext if they need to differ.
+                </p>
+            </template>
         </template>
     </div>
 </template>

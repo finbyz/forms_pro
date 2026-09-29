@@ -61,12 +61,37 @@ class FormCompiler:
         "idx",
     )
 
+    def _table_columns(self, child_doctype):
+        """
+        The columns of a Table field's child DocType.
+
+        A Table field only records the child DocType's *name*, so its columns
+        used to sit outside the snapshot entirely: adding one changed what
+        visitors see while leaving the schema hash identical, so the builder
+        never offered "Publish changes" and the version history recorded a
+        change that had already gone live.
+        """
+        if not child_doctype or not frappe.db.exists("DocType", child_doctype):
+            return []
+        return [
+            {
+                "fieldname": df.fieldname,
+                "label": df.label,
+                "fieldtype": df.fieldtype,
+                "options": df.options,
+                "reqd": df.reqd,
+            }
+            for df in frappe.get_meta(child_doctype).fields
+        ]
+
     def _build_schema(self):
         fields = []
         for field in self.form_doc.get("fields"):
             snapshot = {prop: field.get(prop) for prop in self.SCHEMA_FIELD_PROPS}
             # `required` kept as an alias for older consumers of the snapshot.
             snapshot["required"] = field.reqd
+            if field.fieldtype == "Table":
+                snapshot["table_columns"] = self._table_columns(field.options)
             fields.append(snapshot)
 
         return {

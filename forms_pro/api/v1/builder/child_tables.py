@@ -119,10 +119,25 @@ def create_child_table(form_id: str, field_label: str | None = None) -> dict:
     return {"doctype": name, "columns": get_child_table_columns(name)["columns"]}
 
 
+def is_form_owned(doctype: str) -> bool:
+    """
+    Whether the builder may rewrite this child table's columns.
+
+    A Table field can point at a child DocType the form created, or at one that
+    already belongs to an app -- "Allowed To Transact With" and "Party Account"
+    on Supplier are ERPNext's, shared by every supplier on the site. Only the
+    former is ours to change.
+    """
+    if not doctype or not frappe.db.exists("DocType", doctype):
+        return False
+    row = frappe.db.get_value("DocType", doctype, ["module", "custom", "istable"], as_dict=True)
+    return bool(row and row.module == MODULE and row.custom and row.istable)
+
+
 @frappe.whitelist()
 def get_child_table_columns(doctype: str) -> dict:
     if not doctype or not frappe.db.exists("DocType", doctype):
-        return {"doctype": doctype, "columns": []}
+        return {"doctype": doctype, "columns": [], "editable": False}
 
     meta = frappe.get_meta(doctype)
     columns = [
@@ -130,7 +145,10 @@ def get_child_table_columns(doctype: str) -> dict:
         for f in meta.fields
         if f.fieldtype not in UNSUPPORTED_FRAPPE_FIELDTYPES
     ]
-    return {"doctype": doctype, "columns": columns}
+    # The builder used to offer "Add column" and "Save columns" for every table,
+    # including ones it is not allowed to touch: the author typed their columns,
+    # pressed save, and the server refused -- losing the work with a toast.
+    return {"doctype": doctype, "columns": columns, "editable": is_form_owned(doctype)}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -139,13 +157,18 @@ def set_child_table_columns(doctype: str, columns: list[dict]) -> dict:
     if not frappe.db.exists("DocType", doctype):
         frappe.throw(_("{0} does not exist").format(doctype), frappe.DoesNotExistError)
 
-    doc = frappe.get_doc("DocType", doctype)
-    if doc.module != MODULE or not doc.istable:
-        # Never let the builder rewrite a real application DocType.
+    if not is_form_owned(doctype):
+        # Never let the builder rewrite a DocType that belongs to an app: its
+        # columns are shared by every record on the site, not just this form's.
         frappe.throw(
-            _("{0} is not a form-owned child table and cannot be edited here.").format(doctype),
+            _(
+                "{0} belongs to another app and is shared across the site, so its "
+                "columns cannot be changed from the form builder."
+            ).format(doctype),
             frappe.PermissionError,
         )
+
+    doc = frappe.get_doc("DocType", doctype)
 
     if isinstance(columns, str):
         columns = frappe.parse_json(columns)
