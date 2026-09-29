@@ -69,6 +69,22 @@ function colIndexOf(col: FormField[], cIdx: number): number {
     return col[0]?.column_index ?? cIdx;
 }
 
+/**
+ * Keep the form description in step with the editor.
+ *
+ * The editor reports its own rendering of the content as a change when it
+ * mounts -- an empty description comes back as `<p></p>`. Now that a
+ * description edit triggers an autosave, treating that as an edit would save
+ * and flag "Publish changes" the moment the builder opened.
+ */
+function onDescriptionChange(value: string) {
+    const blank = (html: string | null | undefined) => !html || html === "<p></p>";
+    const current = editFormStore.formData.description;
+    if (value === current) return;
+    if (blank(value) && blank(current)) return;
+    editFormStore.formData.description = value;
+}
+
 /** The field a canvas drag is carrying, or null while dragging in a new one. */
 function fieldFromPayload(payload: DragPayload): FormField | null {
     if (payload.source === "canvas") {
@@ -270,7 +286,7 @@ onClickOutside(fieldContentRef, (event) => {
                                 :content="editFormStore.formData.description"
                                 editor-class="h-fit !w-full form-description text-ink-gray-7"
                                 placeholder="Write a description for your form"
-                                @change="(value: string) => (editFormStore.formData.description = value)"
+                                @change="onDescriptionChange"
                                 :starterkit-options="{
                                     heading: {
                                         levels: [1, 2, 3, 4, 5, 6],

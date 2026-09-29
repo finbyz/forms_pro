@@ -172,6 +172,23 @@ export const useEditForm = defineStore("editForm", () => {
     { deep: true }
   );
 
+  /**
+   * The form's own title and description are edited straight on the canvas,
+   * but the watcher above only looks at `fields`. So typing in the description
+   * -- a heading and then a paragraph, say -- changed the document without
+   * anything noticing: no autosave, no "Saving...", and no "Publish changes"
+   * until some unrelated field edit happened to carry it along.
+   */
+  watch(
+    () => [formResource.value?.doc?.title, formResource.value?.doc?.description],
+    () => {
+      if (skipSnapshot || !formResource.value?.doc) return;
+      formResource.value.isDirty = true;
+      snapshot();
+      triggerAutosave();
+    }
+  );
+
   // Dirty-state: warn before leaving
   function setupDirtyGuard() {
     const handler = (e: BeforeUnloadEvent) => {
