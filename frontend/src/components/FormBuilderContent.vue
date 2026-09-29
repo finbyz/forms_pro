@@ -13,6 +13,7 @@ import FieldCard from "@/components/builder/FieldCard.vue";
 import DropIndicator from "@/components/builder/DropIndicator.vue";
 import { resolveDropTarget, type DropTarget } from "@/utils/dropGeometry";
 import { readDragPayload, readRows, type DragPayload } from "@/utils/canvasDropTarget";
+import { sameHtml } from "@/utils/html_equivalence";
 import SectionNavBar from "@/components/builder/SectionNavBar.vue";
 import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
 
@@ -78,10 +79,10 @@ function colIndexOf(col: FormField[], cIdx: number): number {
  * and flag "Publish changes" the moment the builder opened.
  */
 function onDescriptionChange(value: string) {
-    const blank = (html: string | null | undefined) => !html || html === "<p></p>";
-    const current = editFormStore.formData.description;
-    if (value === current) return;
-    if (blank(value) && blank(current)) return;
+    // Same content written differently -- the server's rewrite of an inline
+    // style, or an empty editor's `<p></p>` -- is not an edit. Writing it back
+    // would start a save the server then rewrites again, round and round.
+    if (sameHtml(value, editFormStore.formData.description)) return;
     editFormStore.formData.description = value;
 }
 

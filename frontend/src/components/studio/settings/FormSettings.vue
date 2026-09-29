@@ -6,6 +6,7 @@ import { Button, FormControl, Badge, createResource } from "frappe-ui";
 const TextEditor = defineAsyncComponent(() => import("@/components/fields/TextEditor.vue"));
 import { useEditForm } from "@/stores/editForm";
 import { validateFormRoute } from "@/utils/form_generator";
+import { sameHtml } from "@/utils/html_equivalence";
 import { toast } from "vue-sonner";
 
 const editFormStore = useEditForm();
@@ -456,12 +457,9 @@ ${scriptTag}`;
                 :bubble-menu="true"
                 @change="
                   (value: string) => {
-                    // The editor reports its own rendering of the content as a
-                    // change on mount -- an empty value comes back as <p></p>.
-                    // That is not an edit, and saving it marked the form dirty.
-                    const blank = (html: string) => !html || html === '<p></p>';
-                    if (value === local.success_description) return;
-                    if (blank(value) && blank(local.success_description)) return;
+                    // Same content written differently is not an edit; see
+                    // utils/html_equivalence.ts.
+                    if (sameHtml(value, local.success_description)) return;
                     local.success_description = value;
                     saveSetting('success_description', value);
                   }

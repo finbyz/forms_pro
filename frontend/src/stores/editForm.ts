@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { canonicalHtml } from "@/utils/html_equivalence";
 import { ref, computed, watch, onUnmounted, nextTick } from "vue";
 import { createDocumentResource, createResource } from "frappe-ui";
 import {
@@ -179,8 +180,17 @@ export const useEditForm = defineStore("editForm", () => {
    * anything noticing: no autosave, no "Saving...", and no "Publish changes"
    * until some unrelated field edit happened to carry it along.
    */
+  //
+  // Watched as one string, not as an array: a getter returning a new array is
+  // "changed" every time it runs, and every save replaces the document, so the
+  // save's own response looked like an edit and started the next save. And
+  // the description is compared in canonical form, because the server rewrites
+  // inline styles on the way in -- see utils/html_equivalence.ts.
   watch(
-    () => [formResource.value?.doc?.title, formResource.value?.doc?.description],
+    () =>
+      `${formResource.value?.doc?.title ?? ""}\u0000${canonicalHtml(
+        formResource.value?.doc?.description
+      )}`,
     () => {
       if (skipSnapshot || !formResource.value?.doc) return;
       formResource.value.isDirty = true;

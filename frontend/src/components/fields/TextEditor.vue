@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { sameHtml } from "@/utils/html_equivalence";
 import { TextEditor as FrappeTextEditor } from "frappe-ui";
 
 const props = withDefaults(
@@ -56,11 +57,26 @@ const emit = defineEmits<{
     (e: "change", val: string): void;
 }>();
 
+/**
+ * What the editor last produced itself.
+ *
+ * When a value comes back from the server it is the same content, but with
+ * inline styles rewritten. Handing that to the editor makes it replace its
+ * document -- the cursor jumps while you are typing -- and then emit its own
+ * spelling again, which is saved and rewritten again. If the incoming value is
+ * the same content as what the editor already holds, the editor keeps its own.
+ */
+const lastEmitted = ref<string | null>(null);
+
 const editorContent = computed(() => {
-    if (props.modelValue !== undefined && props.modelValue !== null) {
-        return props.modelValue;
+    const incoming =
+        props.modelValue !== undefined && props.modelValue !== null
+            ? props.modelValue
+            : props.content || "";
+    if (lastEmitted.value !== null && sameHtml(incoming, lastEmitted.value)) {
+        return lastEmitted.value;
     }
-    return props.content || "";
+    return incoming;
 });
 
 const isEditable = computed(() => {
@@ -103,6 +119,7 @@ const resolvedEditorClass = computed(() => {
 });
 
 function onChange(val: string) {
+    lastEmitted.value = val;
     // frappe-ui raises `change` and `update:modelValue` together for a single
     // edit, so only one of them is listened to; both are re-emitted here for
     // parents that bind either.
