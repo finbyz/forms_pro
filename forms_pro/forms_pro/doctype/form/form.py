@@ -30,6 +30,38 @@ def _doctype_signature(doctype_doc) -> tuple:
         ),
     )
 
+def to_naming_series(pattern: str) -> str:
+    """
+    Turn `CR-{YYYY}-{######}` into Frappe's naming series `CR-.YYYY.-.######`.
+
+    The pattern used to be stored as a `format:` rule, and that is where the
+    counter went wrong. Frappe resolves each braced part of a `format:` rule on
+    its own, so `{######}` is looked up with nothing in front of it -- and every
+    such pattern on the site shares the one counter kept under an empty key.
+    A form expecting CR-2026-000001 got CR-2026-067163, the 67,163rd number
+    handed out to anyone.
+
+    A naming series resolves left to right and keys the counter on everything
+    before the number, so `CR-2026-` gets a counter of its own that starts at 1
+    and starts again each year -- the way ERPNext's own series behave.
+    """
+    parts = []
+    for piece in re.split(r"(\{[^}]*\})", pattern):
+        if not piece:
+            continue
+        if piece.startswith("{") and piece.endswith("}"):
+            token = piece[1:-1]
+            # Date tokens and the counter are bare; a fieldname keeps its braces
+            # so Frappe reads it from the document rather than as literal text.
+            if set(token) == {"#"} or token in Form.NAMING_TOKENS:
+                parts.append(token)
+            else:
+                parts.append(piece)
+        else:
+            parts.append(piece)
+    return ".".join(parts)
+
+
 class Form(Document):
     # begin: auto-generated types
     # This code is auto-generated. Do not modify anything in this block.
@@ -186,10 +218,10 @@ class Form(Document):
 
         Naming by a single field (`field:email`) makes that answer the primary
         key, so the second person to use the same address cannot submit at all.
-        A pattern avoids that: it is Frappe's `format:` rule, where `{#####}`
-        is an incrementing counter that keeps every name unique.
+        A pattern avoids that, with an incrementing counter keeping every name
+        unique.
 
-        Supported inside braces, exactly as in the desk:
+        Supported inside braces:
           {#####}      an incrementing number, one digit per #
           {YYYY} {YY}  year        {MM} month     {DD} day
           {WW}         week        {JJJ} day of year
@@ -198,10 +230,6 @@ class Form(Document):
 
         A blank pattern leaves the DocType's naming alone, so a rule set by
         hand in the desk is never overwritten.
-
-        Note that `{#####}` draws on one counter shared by every pattern on the
-        site -- that is how Frappe's `format:` rule works, and it is what keeps
-        names unique. Numbers are therefore sequential but not per-form.
         """
         pattern = (self.naming_pattern or "").strip()
         if not pattern:
@@ -209,7 +237,7 @@ class Form(Document):
 
         # Frappe derives `naming_rule` from `autoname` itself; setting it here
         # only risks disagreeing with what it decides.
-        doctype_doc.autoname = f"format:{pattern}"
+        doctype_doc.autoname = to_naming_series(pattern)
 
     #: Tokens Frappe's naming series understands on its own, so a pattern using
     #: them is valid even though they are not fields on this form.
@@ -227,6 +255,15 @@ class Form(Document):
         pattern = (self.naming_pattern or "").strip()
         if not pattern:
             return
+
+        if "." in pattern:
+            frappe.throw(
+                _(
+                    "Record name pattern {0} contains a dot. Frappe uses dots to "
+                    "separate the parts of a name, so use a dash or slash instead."
+                ).format(pattern),
+                frappe.ValidationError,
+            )
 
         if pattern.count("{") != pattern.count("}"):
             frappe.throw(
