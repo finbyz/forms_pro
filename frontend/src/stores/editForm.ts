@@ -743,8 +743,12 @@ export const useEditForm = defineStore("editForm", () => {
 
   /**
    * Put a field beside the one above it, turning that row into two columns.
-   * The click-driven counterpart to "Move to own row" — dragging onto a 12px
-   * strip is a poor way to ask for a column.
+   *
+   * The only way a column gets made. Dragging used to create one whenever the
+   * pointer strayed near the side of a field, which meant a plain drag up or
+   * down kept splitting rows nobody meant to split. A drag now only moves
+   * fields between the columns that already exist; "Move to own row" undoes
+   * this one.
    */
   function moveBesideAbove(field: FormField) {
     const fs: FormField[] = formResource.value?.doc?.fields ?? [];

@@ -21,15 +21,6 @@ const THICKNESS = 3;
 const style = computed(() => {
     const line = props.indicator;
     if (!line) return undefined;
-
-    if (line.orientation === "vertical") {
-        return {
-            left: `${line.left - THICKNESS / 2}px`,
-            top: `${line.top}px`,
-            width: `${THICKNESS}px`,
-            height: `${line.length}px`,
-        };
-    }
     return {
         left: `${line.left}px`,
         top: `${line.top - THICKNESS / 2}px`,
@@ -37,8 +28,6 @@ const style = computed(() => {
         height: `${THICKNESS}px`,
     };
 });
-
-const isVertical = computed(() => props.indicator?.orientation === "vertical");
 </script>
 
 <template>
@@ -50,14 +39,8 @@ const isVertical = computed(() => props.indicator?.orientation === "vertical");
             aria-hidden="true"
         >
             <!-- End caps, so a short line still reads as an insertion point. -->
-            <span
-                class="absolute h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-inherit"
-                :class="isVertical ? 'left-1/2 top-0' : 'left-0 top-1/2'"
-            />
-            <span
-                class="absolute h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-inherit"
-                :class="isVertical ? 'left-1/2 top-full' : 'left-full top-1/2'"
-            />
+            <span class="absolute left-0 top-1/2 h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-inherit" />
+            <span class="absolute left-full top-1/2 h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-inherit" />
         </div>
     </Teleport>
 </template>

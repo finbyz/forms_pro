@@ -105,24 +105,58 @@ describe("the edge band of a row", () => {
 });
 
 describe("across the columns of a row", () => {
-  it("near the left edge of a column makes a column before it", () => {
-    const target = resolveDropTarget(layout(), 205, 170)!;
-    expect(target).toMatchObject({ kind: "column", rowIndex: 1, columnIndex: 1 });
+  /**
+   * Dragging used to split a row in two whenever the pointer brushed the side
+   * of a field, so an ordinary drag up or down kept producing side-by-side
+   * layouts nobody asked for. Columns are made with the split control now;
+   * a drag only chooses which existing column to drop into.
+   */
+  it("never creates a column", () => {
+    const points: [number, number][] = [
+      [205, 170],
+      [395, 170],
+      [480, 170],
+      [-40, 170],
+      [100, 170],
+    ];
+    for (const [x, y] of points) {
+      expect(resolveDropTarget(layout(), x, y)!.kind).not.toBe("column");
+    }
   });
 
-  it("near the right edge of the last column appends a column", () => {
-    const target = resolveDropTarget(layout(), 395, 170)!;
-    expect(target).toMatchObject({ kind: "column", rowIndex: 1, columnIndex: 2 });
+  it("drops into the column under the pointer", () => {
+    expect(resolveDropTarget(layout(), 100, 170)).toMatchObject({
+      kind: "cell",
+      rowIndex: 1,
+      columnIndex: 0,
+    });
+    expect(resolveDropTarget(layout(), 300, 170)).toMatchObject({
+      kind: "cell",
+      rowIndex: 1,
+      columnIndex: 1,
+    });
   });
 
-  it("past the right of the row appends a column", () => {
-    const target = resolveDropTarget(layout(), 480, 170)!;
-    expect(target).toMatchObject({ kind: "column", rowIndex: 1, columnIndex: 2 });
+  it("snaps to the nearest column when the pointer is past the row", () => {
+    expect(resolveDropTarget(layout(), 480, 170)).toMatchObject({
+      kind: "cell",
+      columnIndex: 1,
+    });
+    expect(resolveDropTarget(layout(), -40, 170)).toMatchObject({
+      kind: "cell",
+      columnIndex: 0,
+    });
   });
 
-  it("the middle of a column drops into it rather than beside it", () => {
-    const target = resolveDropTarget(layout(), 100, 170)!;
-    expect(target).toMatchObject({ kind: "cell", rowIndex: 1, columnIndex: 0 });
+  it("still reaches the edges of a column, which used to split the row", () => {
+    expect(resolveDropTarget(layout(), 205, 170)).toMatchObject({
+      kind: "cell",
+      columnIndex: 1,
+    });
+    expect(resolveDropTarget(layout(), 395, 170)).toMatchObject({
+      kind: "cell",
+      columnIndex: 1,
+    });
   });
 });
 
@@ -151,30 +185,18 @@ describe("stacking inside a column", () => {
 });
 
 describe("the indicator", () => {
-  it("is a horizontal line spanning the row when making a row", () => {
-    const { indicator } = resolveDropTarget(layout(), 200, 5)!;
-    expect(indicator.orientation).toBe("horizontal");
-    expect(indicator.length).toBe(400);
+  it("spans the row when making a row", () => {
+    expect(resolveDropTarget(layout(), 200, 5)!.indicator.length).toBe(400);
   });
 
   it("sits in the gap between the rows it would separate", () => {
     // Near the top of row 1, so the line goes in the gap above it: row 0 ends
     // at 100 and row 1 starts at 120.
-    const { indicator } = resolveDropTarget(layout(), 200, 125)!;
-    expect(indicator.top).toBe(110);
-  });
-
-  it("is a vertical line spanning the row height when making a column", () => {
-    const { indicator } = resolveDropTarget(layout(), 205, 170)!;
-    expect(indicator.orientation).toBe("vertical");
-    expect(indicator.length).toBe(100);
-    expect(indicator.left).toBe(200);
+    expect(resolveDropTarget(layout(), 200, 125)!.indicator.top).toBe(110);
   });
 
   it("spans only the column when stacking inside one", () => {
-    const { indicator } = resolveDropTarget(layout(), 100, 170)!;
-    expect(indicator.orientation).toBe("horizontal");
-    expect(indicator.length).toBe(200);
+    expect(resolveDropTarget(layout(), 100, 170)!.indicator.length).toBe(200);
   });
 });
 

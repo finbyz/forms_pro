@@ -129,9 +129,8 @@ function onCanvasDrop(event: DragEvent) {
 
     if (target.kind === "row") {
         editFormStore.insertNewRow(field, target.rowIndex);
-    } else if (target.kind === "column") {
-        editFormStore.moveField(field, target.rowIndex, target.columnIndex ?? 0);
     } else {
+        // Into a column that already exists. Dragging never makes one.
         editFormStore.insertCell(
             field,
             target.rowIndex,

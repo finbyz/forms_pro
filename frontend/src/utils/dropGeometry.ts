@@ -40,13 +40,18 @@ export interface RowBox {
   columns: ColumnBox[];
 }
 
-export type DropKind = "row" | "column" | "cell";
+/**
+ * Only two outcomes. A drag either puts the field on its own new row, or
+ * places it inside a column that already exists. It cannot create a column --
+ * that is the split control's job.
+ */
+export type DropKind = "row" | "cell";
 
 export interface DropTarget {
   kind: DropKind;
   /** Row to insert at, or the row being inserted into. */
   rowIndex: number;
-  /** Set for "column" and "cell". */
+  /** Set for "cell". */
   columnIndex?: number;
   /** Set for "cell": the position within the column. */
   cellIndex?: number;
@@ -54,11 +59,13 @@ export interface DropTarget {
   indicator: Indicator;
 }
 
+/**
+ * The line to draw. Always horizontal: a drag either inserts a row or stacks
+ * into a column, and both of those are a gap between things above and below.
+ */
 export interface Indicator {
-  orientation: "horizontal" | "vertical";
   left: number;
   top: number;
-  /** Width for a horizontal line, height for a vertical one. */
   length: number;
 }
 
@@ -76,13 +83,6 @@ export interface Indicator {
  */
 const GAP_CATCH = 12;
 
-/**
- * How much of a column's width, at each side, means "make a new column". Safe
- * as a fraction: a column is only ever divided left to right, so nothing else
- * competes for the band.
- */
-const COLUMN_EDGE_BAND = 0.28;
-
 /** A drop this far below the last row lands at the end rather than nowhere. */
 const TRAILING_SLACK = 160;
 
@@ -90,11 +90,7 @@ const height = (r: Rect) => r.bottom - r.top;
 const width = (r: Rect) => r.right - r.left;
 
 function horizontal(rect: Rect, y: number): Indicator {
-  return { orientation: "horizontal", left: rect.left, top: y, length: width(rect) };
-}
-
-function vertical(rect: Rect, x: number): Indicator {
-  return { orientation: "vertical", left: x, top: rect.top, length: height(rect) };
+  return { left: rect.left, top: y, length: width(rect) };
 }
 
 /** The gap between two edges, or the edge itself when there is nothing opposite. */
@@ -113,18 +109,6 @@ function newRowTarget(rows: RowBox[], rowIndex: number): DropTarget {
     kind: "row",
     rowIndex,
     indicator: horizontal(reference, y),
-  };
-}
-
-function newColumnTarget(row: RowBox, columnIndex: number): DropTarget {
-  const before = row.columns[columnIndex - 1];
-  const after = row.columns[columnIndex];
-  const x = midpoint(before ? before.rect.right : null, after ? after.rect.left : null);
-  return {
-    kind: "column",
-    rowIndex: row.rowIndex,
-    columnIndex,
-    indicator: vertical(row.rect, x),
   };
 }
 
@@ -149,8 +133,14 @@ function contains(rect: Rect, x: number, y: number): boolean {
  * Resolve the pointer to a drop target.
  *
  * Reads outside in: which row, then whether the pointer is near that row's top
- * or bottom edge (a new row) or inside it; then the same question across the
- * row's columns; and finally which gap between stacked fields it is nearest.
+ * or bottom edge (a new row) or inside it, and finally which existing column
+ * it is over and which gap between that column's fields it is nearest.
+ *
+ * Dragging never splits a row into columns. It used to: brushing past the side
+ * of a field turned the row into two columns, so an ordinary drag up or down
+ * kept producing side-by-side layouts nobody asked for. Columns are made
+ * deliberately, with the split control on the field, and dragging then moves
+ * fields into the columns that exist.
  *
  * Returns null only when there is no layout to drop into at all, which the
  * caller renders as "drop to start the form".
@@ -183,27 +173,12 @@ export function resolveDropTarget(
   if (y < row.rect.top + catchment) return newRowTarget(rows, row.rowIndex);
   if (y > row.rect.bottom - catchment) return newRowTarget(rows, row.rowIndex + 1);
 
-  if (!row.columns.length) return newColumnTarget(row, 0);
+  // A row with no columns has nothing to drop into, so this becomes a new row.
+  if (!row.columns.length) return newRowTarget(rows, row.rowIndex);
 
-  // Past either end of the row horizontally: a new column there.
-  if (x < row.columns[0].rect.left) return newColumnTarget(row, 0);
-  const lastColumn = row.columns[row.columns.length - 1];
-  if (x > lastColumn.rect.right) {
-    return newColumnTarget(row, lastColumn.columnIndex + 1);
-  }
+  // Horizontal position only chooses which existing column, never makes one.
+  const column = nearestColumn(row, x);
 
-  const column =
-    row.columns.find((c) => x >= c.rect.left && x <= c.rect.right) ??
-    row.columns.find((c) => c.rect.left > x) ??
-    lastColumn;
-
-  const columnBand = width(column.rect) * COLUMN_EDGE_BAND;
-  if (x < column.rect.left + columnBand) return newColumnTarget(row, column.columnIndex);
-  if (x > column.rect.right - columnBand) {
-    return newColumnTarget(row, column.columnIndex + 1);
-  }
-
-  // Inside the column: stack above or below the field nearest the pointer.
   if (!column.cells.length) return cellTarget(row, column, 0);
 
   for (const cell of column.cells) {
@@ -211,6 +186,24 @@ export function resolveDropTarget(
     if (y < middle) return cellTarget(row, column, cell.cellIndex);
   }
   return cellTarget(row, column, column.cells.length);
+}
+
+/** The column the pointer is over, or the closest one when it is past the ends. */
+function nearestColumn(row: RowBox, x: number): ColumnBox {
+  const inside = row.columns.find((c) => x >= c.rect.left && x <= c.rect.right);
+  if (inside) return inside;
+
+  return row.columns.reduce((closest, candidate) => {
+    const distance = Math.min(
+      Math.abs(x - candidate.rect.left),
+      Math.abs(x - candidate.rect.right)
+    );
+    const best = Math.min(
+      Math.abs(x - closest.rect.left),
+      Math.abs(x - closest.rect.right)
+    );
+    return distance < best ? candidate : closest;
+  });
 }
 
 /** True when the pointer is inside the area the form occupies. */
