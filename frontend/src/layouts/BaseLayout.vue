@@ -5,6 +5,17 @@
                 <TeamSwitcher />
             </template>
             <template #footer-items="{ isCollapsed }">
+                <a
+                    v-if="userStore.user?.has_desk_access"
+                    href="/app"
+                    aria-label="Back to Desk"
+                    :title="isCollapsed ? 'Back to Desk' : undefined"
+                    class="p-2 rounded-4 flex gap-2 items-center text-ink-gray-7 hover:bg-surface-gray-2 transition-base"
+                    :class="{ '!p-1': isCollapsed }"
+                >
+                    <lucide-layout-dashboard class="size-5 shrink-0" aria-hidden="true" />
+                    <span v-if="!isCollapsed" class="text-sm-medium">Back to Desk</span>
+                </a>
                 <Popover placement="top-start">
                     <template #target="{ togglePopover, isOpen }">
                         <div
@@ -55,10 +66,13 @@
 </template>
 <script setup lang="ts">
 import { session } from "@/data/session";
+import { useUser } from "@/stores/user";
 import { Popover, Sidebar, type SidebarProps } from "frappe-ui";
 import type { PropType } from "vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import TeamSwitcher from "@/components/team/TeamSwitcher.vue";
+
+const userStore = useUser();
 
 type SidebarSectionProps = NonNullable<SidebarProps["sections"]> extends (infer T)[] ? T : never;
 type SidebarHeaderProps = NonNullable<SidebarProps["header"]>;

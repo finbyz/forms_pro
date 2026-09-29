@@ -227,23 +227,84 @@ def get_form_for_edit(form_id: str) -> dict:
     return get_form(form_id)
 
 
+#: Nobody needs more than this to pick a value, and it stops one request
+#: walking a whole table.
+_MAX_LINK_OPTIONS = 100
+
+
+def _doctype_is_offered_by_a_public_form(doctype: str) -> bool:
+    """
+    Whether a visitor is genuinely being asked to choose from this DocType.
+
+    A public form with a "Company" Link field has to show company names -- that
+    is the field doing its job. Anything else is not the visitor's business,
+    and the doctype arrives from the browser, so it cannot be taken on trust.
+    """
+    return bool(
+        frappe.db.sql(
+            """
+            SELECT 1
+            FROM `tabForm Field` ff
+            INNER JOIN `tabForm` f ON f.name = ff.parent
+            WHERE ff.parenttype = 'Form'
+              AND ff.fieldtype = 'Link'
+              AND ff.options = %(doctype)s
+              AND ff.hidden = 0
+              AND f.is_published = 1
+              AND f.login_required = 0
+            LIMIT 1
+            """,
+            {"doctype": doctype},
+        )
+    )
+
+
 @frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
 def get_link_field_options(
     doctype: str,
     filters: dict | None = None,
     page_length: int = 20,
 ) -> list[str]:
+    """
+    The choices behind a Link field.
+
+    The DocType comes from the browser, so this used to be an open door: the
+    endpoint allows guests and `frappe.get_all` does not check permissions, so
+    anyone could ask for `User` and read every account on the site. Two things
+    close it -- a guest may only list a DocType that a published, guest-facing
+    form actually links to, and a signed-in user goes through `get_list`, which
+    applies that user's own read permissions.
+    """
+    if not doctype or not frappe.db.exists("DocType", doctype):
+        return []
+
+    is_guest = frappe.session.user == "Guest"
+
+    if is_guest and not _doctype_is_offered_by_a_public_form(doctype):
+        frappe.throw(
+            _("You are not permitted to list {0}.").format(doctype),
+            frappe.PermissionError,
+        )
+
     meta = frappe.get_meta(doctype)
     title_field = meta.title_field or "name"
+    page_length = min(frappe.utils.cint(page_length) or 20, _MAX_LINK_OPTIONS)
 
-    results = frappe.get_all(
+    # Filters are a query the caller writes. A visitor filling in a form has no
+    # business writing one, so theirs is dropped rather than trusted.
+    if is_guest:
+        filters = {}
+    elif isinstance(filters, str):
+        filters = frappe.parse_json(filters)
+
+    query = frappe.get_all if is_guest else frappe.get_list
+    return query(
         doctype=doctype,
         filters=filters or {},
         page_length=page_length,
         fields=["name as value", f"{title_field} as label"],
         order_by="modified desc",
     )
-    return results
 
 
 @frappe.whitelist()
