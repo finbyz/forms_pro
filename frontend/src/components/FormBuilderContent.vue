@@ -238,8 +238,7 @@ onClickOutside(fieldContentRef, (event) => {
                                         levels: [1, 2, 3, 4, 5, 6],
                                     },
                                 }"
-                                :fixed-menu="true"
-                                :bubble-menu="false"
+                                :bubble-menu="true"
                             />
                         </div>
                         <hr class="border-outline-gray-1 -mx-8 mb-8" />

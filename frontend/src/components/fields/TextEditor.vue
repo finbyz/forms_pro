@@ -25,7 +25,11 @@ const props = withDefaults(
         inEditMode: false,
         placeholder: "",
         editorClass: undefined,
-        fixedMenu: true,
+        // frappe-ui's own default. Defaulting this to `true` put a permanent
+        // formatting toolbar on every caller that does not pass the prop --
+        // including the form description and the success message, which are
+        // rendered to visitors and are not editable at all.
+        fixedMenu: false,
         bubbleMenu: false,
         floatingMenu: false,
         starterkitOptions: () => ({}),
@@ -51,13 +55,20 @@ const isEditable = computed(() => {
     return true;
 });
 
+// Nothing to format in text that cannot be edited: a read-only rendering shows
+// the content alone, never a toolbar.
+const resolvedFixedMenu = computed(() => (isEditable.value ? props.fixedMenu : false));
+
 const resolvedBubbleMenu = computed(() => {
+    if (!isEditable.value) return false;
     // When a fixed top toolbar is enabled, do not show floating bubble menu on text selection
     if (props.fixedMenu) {
         return false;
     }
     return props.bubbleMenu;
 });
+
+const resolvedFloatingMenu = computed(() => (isEditable.value ? props.floatingMenu : false));
 
 const resolvedStarterKit = computed(() => {
     return {
@@ -93,9 +104,9 @@ function onChange(val: string) {
             :editable="isEditable"
             :placeholder="resolvedPlaceholder"
             :editor-class="resolvedEditorClass"
-            :fixed-menu="fixedMenu"
+            :fixed-menu="resolvedFixedMenu"
             :bubble-menu="resolvedBubbleMenu"
-            :floating-menu="floatingMenu"
+            :floating-menu="resolvedFloatingMenu"
             :starterkit-options="resolvedStarterKit"
             @change="onChange"
         />
