@@ -387,3 +387,46 @@
 .fp-themed :where(h1, h2, h3) {
   color: var(--fp-primary-color);
 }
+
+/*
+ * Drag and drop on the builder canvas.
+ *
+ * SortableJS is running in fallback mode, which means it clones the dragged
+ * card and moves the clone with the cursor while the original stays in the
+ * list. Without styling, both are fully visible at once and the clone is
+ * clipped by the scrolling canvas -- the doubled, half-drawn card people were
+ * seeing. `fallbackOnBody` lifts the clone out of the scroll container; these
+ * three classes make it clear which is which.
+ */
+
+/* The placeholder showing where the card will land. */
+.fp-drag-ghost {
+    opacity: 0.35;
+    background: var(--surface-blue-1, #eff6ff);
+    border-radius: 0.5rem;
+}
+
+/* The original card, left behind while its clone follows the cursor. */
+.fp-drag-chosen {
+    cursor: grabbing;
+}
+
+/* The clone under the cursor. */
+.fp-drag-preview {
+    opacity: 1 !important;
+    background: var(--surface-white, #fff);
+    border-radius: 0.5rem;
+    box-shadow: 0 12px 28px -8px rgb(0 0 0 / 0.28);
+    /* Pointer events on the clone would make it its own drop target. */
+    pointer-events: none;
+}
+
+/*
+ * A card being dragged past should not animate its own contents; only the card box
+ * moves. Transitions on children are what make a reorder look like it stutters.
+ */
+.sortable-drag *,
+.sortable-ghost * {
+    transition: none !important;
+    animation: none !important;
+}

@@ -10,8 +10,18 @@ import { useEditForm } from "@/stores/editForm";
 const editFormStore = useEditForm();
 const search = ref("");
 
-// Page Break is added via the step controls, not as a draggable field.
-const HIDDEN_FROM_SIDEBAR = new Set<string>([Fieldtype.PAGE_BREAK]);
+const HIDDEN_FROM_SIDEBAR = new Set<string>([
+    // Page Break is added via the step controls, not as a draggable field.
+    Fieldtype.PAGE_BREAK,
+
+    // Link is withheld until a client asks for it. Choosing a DocType here
+    // means the visitors filling the form can list that DocType's records --
+    // that is the field doing its job, but it is a decision about who may see
+    // what, and not one to make by dropping a field on a canvas. Delete this
+    // line to put it back; nothing else is needed, and Link fields that a form
+    // already has, or that came from the target DocType, keep working.
+    Fieldtype.LINK,
+]);
 
 const CATEGORIES: { label: string; fieldNames: Fieldtype[] }[] = [
     {
@@ -149,8 +159,11 @@ function cloneField(f: FormFields) {
             item-key="name"
             tag="div"
             :force-fallback="true"
-            :animation="200"
-            ghost-class="opacity-50"
+            :fallback-on-body="true"
+            :fallback-tolerance="4"
+            :animation="150"
+            ghost-class="fp-drag-ghost"
+            drag-class="fp-drag-preview"
             class="flex flex-col gap-1"
             @start="editFormStore.setDragging(true)"
             @end="editFormStore.setDragging(false)"

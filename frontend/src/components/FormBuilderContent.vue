@@ -40,8 +40,18 @@ const groupedRows = useGroupedRows(
     )
 );
 
+/**
+ * A field's identity, not its position.
+ *
+ * This used to be `row-column-cell`, which changes the moment a field is
+ * dragged anywhere -- so Vue treated every field that shifted as a different
+ * field, destroyed its component and built a new one mid-drag. That is the
+ * flicker: the card under the cursor and every card it passes are being torn
+ * down and recreated instead of moved. Keyed by fieldname, Vue moves the
+ * existing DOM node and the drag stays still.
+ */
 function fieldKey(field: FormField): string {
-    return `${field.row_index ?? 0}-${field.column_index ?? 0}-${field.cell_index ?? 0}`;
+    return field.fieldname || field.field_key || `${field.row_index}-${field.column_index}-${field.cell_index}`;
 }
 
 function rowIndexOf(row: FormField[][], rIdx: number): number {
@@ -267,8 +277,20 @@ onClickOutside(fieldContentRef, (event) => {
                             <template #item="{}"></template>
                         </draggableComponent>
                         <div class="flex flex-col" v-else>
+                            <!--
+                                The drop zones exist only while something is
+                                being dragged. Each one is its own SortableJS
+                                instance, and the row zones each run a
+                                MutationObserver, so on a long form they added
+                                up to well over a hundred live instances
+                                sitting idle -- paid for on every scroll and
+                                every click. `isDraggingField` is set on drag
+                                start, before the first dragover, so they are
+                                mounted by the time a drop could land.
+                            -->
                             <template v-for="(row, rIdx) in groupedRows" :key="rowIndexOf(row, rIdx)">
                                 <RowDropZone
+                                    v-if="isDraggingField"
                                     :atRow="rowIndexOf(row, rIdx)"
                                     :isDragging="isDraggingField"
                                     @drop="onRowZoneDrop"
@@ -283,6 +305,7 @@ onClickOutside(fieldContentRef, (event) => {
                                         :key="`${rowIndexOf(row, rIdx)}-${colIndexOf(col, cIdx)}`"
                                     >
                                         <ColumnDropZone
+                                            v-if="isDraggingField"
                                             :atRow="rowIndexOf(row, rIdx)"
                                             :atCol="colIndexOf(col, cIdx)"
                                             :isDragging="isDraggingField"
@@ -292,11 +315,15 @@ onClickOutside(fieldContentRef, (event) => {
                                             :list="[...col]"
                                             :group="{ name: 'fields' }"
                                             :item-key="fieldKey"
-                                            :animation="200"
+                                            :animation="150"
                                             handle=".handle"
-                                            ghost-class="opacity-50"
+                                            ghost-class="fp-drag-ghost"
+                                            drag-class="fp-drag-preview"
+                                            chosen-class="fp-drag-chosen"
                                             tag="div"
                                             :force-fallback="true"
+                                            :fallback-on-body="true"
+                                            :fallback-tolerance="4"
                                             data-form-builder-component="cell-column"
                                             :data-row-index="rowIndexOf(row, rIdx)"
                                             :data-col-index="colIndexOf(col, cIdx)"
@@ -321,6 +348,7 @@ onClickOutside(fieldContentRef, (event) => {
                                         </draggableComponent>
                                     </template>
                                     <ColumnDropZone
+                                        v-if="isDraggingField"
                                         :atRow="rowIndexOf(row, rIdx)"
                                         :atCol="row.length"
                                         :isDragging="isDraggingField"
@@ -328,7 +356,7 @@ onClickOutside(fieldContentRef, (event) => {
                                     />
                                 </div>
                                 <RowDropZone
-                                    v-show="rIdx === groupedRows.length - 1"
+                                    v-if="isDraggingField && rIdx === groupedRows.length - 1"
                                     :atRow="rowIndexOf(row, rIdx) + 1"
                                     :isDragging="isDraggingField"
                                     @drop="onRowZoneDrop"
