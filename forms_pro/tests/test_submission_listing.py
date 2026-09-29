@@ -141,3 +141,46 @@ class TestSubmissionListing(FrappeTestCase):
         from forms_pro.api.submission.endpoints import _list_submissions
 
         self.assertLessEqual(len(_list_submissions(self.form)), listing.MAX_PAGE_LENGTH)
+
+
+class TestJsonColumnValues(FrappeTestCase):
+    """
+    A JSON column carries a `CHECK (json_valid(...))` constraint in MariaDB, so
+    anything that is not valid JSON is refused by the database itself -- which
+    arrived as `OperationalError (4025) CONSTRAINT ... failed`, a 500 with
+    nothing in it for the visitor. The empty string a Multiselect sends when
+    nobody picks anything was enough to trigger it.
+    """
+
+    def test_blank_answers_become_null(self):
+        from forms_pro.services.mapping.adapters import _as_json_column
+
+        for blank in (None, "", []):
+            self.assertIsNone(_as_json_column(blank))
+
+    def test_a_list_is_serialised(self):
+        from forms_pro.services.mapping.adapters import _as_json_column
+        import json
+
+        self.assertEqual(json.loads(_as_json_column(["ERP", "CRM"])), ["ERP", "CRM"])
+
+    def test_a_bare_answer_becomes_a_one_item_list(self):
+        from forms_pro.services.mapping.adapters import _as_json_column
+        import json
+
+        self.assertEqual(json.loads(_as_json_column("ERP")), ["ERP"])
+
+    def test_already_encoded_json_is_not_encoded_again(self):
+        from forms_pro.services.mapping.adapters import _as_json_column
+        import json
+
+        self.assertEqual(json.loads(_as_json_column('["ERP"]')), ["ERP"])
+
+    def test_every_result_is_valid_json_or_null(self):
+        from forms_pro.services.mapping.adapters import _as_json_column
+        import json
+
+        for value in ("", "ERP", "ERP,CRM", ["a"], {"a": 1}, [], None, 7):
+            out = _as_json_column(value)
+            if out is not None:
+                json.loads(out)  # must not raise: this is what the constraint checks

@@ -17,6 +17,37 @@ import frappe
 from frappe.model.document import Document
 
 
+def _as_json_column(value: Any) -> str | None:
+    """
+    A value fit for a JSON column.
+
+    MariaDB gives a JSON column a `CHECK (json_valid(...))` constraint, and it
+    rejects anything that is not valid JSON -- including the empty string a
+    Multiselect sends when the visitor picks nothing. That came back as
+    `OperationalError (4025) CONSTRAINT ... failed`, a 500 with nothing in it
+    for the person filling the form, and no submission saved.
+
+    Blank means no answer, so the column is left NULL, which the constraint
+    allows. Anything else is stored as JSON: already-encoded JSON is passed
+    through unchanged rather than being encoded a second time.
+    """
+    if value is None or value == "" or value == []:
+        return None
+
+    if isinstance(value, (list, dict)):
+        return json.dumps(value)
+
+    if isinstance(value, str):
+        try:
+            json.loads(value)
+        except (TypeError, ValueError):
+            # A bare answer like "ERP" is one choice, not malformed JSON.
+            return json.dumps([value])
+        return value
+
+    return json.dumps(value)
+
+
 class TargetAdapter:
     """Abstract interface for form-to-target mapping adapters."""
 
@@ -57,8 +88,9 @@ class TargetAdapter:
                 df = self.target_meta.get_field(fieldname)
                 if df.fieldtype == "Table" and isinstance(value, list):
                     self._set_child_rows(doc, fieldname, value, df.options)
+                elif df.fieldtype == "JSON":
+                    doc.set(fieldname, _as_json_column(value))
                 elif isinstance(value, (list, dict)):
-                    # A Multiselect arrives as a list and its column is JSON.
                     # Frappe refuses a list on anything but a Table field
                     # ("Value for X cannot be a list"), so serialise it here --
                     # the one place that knows the column's real type.
