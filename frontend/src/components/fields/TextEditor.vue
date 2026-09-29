@@ -15,6 +15,7 @@ const props = withDefaults(
         bubbleMenu?: boolean | any[];
         floatingMenu?: boolean | any[];
         starterkitOptions?: any;
+        uploadArgs?: Record<string, any>;
         field?: any;
     }>(),
     {
@@ -33,6 +34,16 @@ const props = withDefaults(
         bubbleMenu: false,
         floatingMenu: false,
         starterkitOptions: () => ({}),
+        // An image or video added to a rich-text answer is uploaded like any
+        // other file, and Frappe's guest allowlist is keyed on the doctype the
+        // file is filed under. Without this the upload arrived carrying no
+        // doctype at all and was refused -- "Guests are not allowed to upload
+        // files for None Doctype" -- so no visitor could add one.
+        uploadArgs: () => ({
+            doctype: "FP Form Submission",
+            private: true,
+            folder: "Home/Attachments",
+        }),
         field: undefined,
     }
 );
@@ -108,6 +119,7 @@ function onChange(val: string) {
             :bubble-menu="resolvedBubbleMenu"
             :floating-menu="resolvedFloatingMenu"
             :starterkit-options="resolvedStarterKit"
+            :upload-args="uploadArgs"
             @change="onChange"
         />
     </div>
