@@ -42,7 +42,10 @@ async function doRevert(v: any) {
             },
         });
         await resource.submit();
-        await editFormStore.initialize(formName.value);
+        // `initialize` returns early for the form already open, so the builder
+        // kept showing the draft it had just replaced. Refetch instead.
+        editFormStore.reload();
+        await editFormStore.refreshPublishState();
         toast.success(`Reverted to v${v.version_number}`);
     } catch (e: any) {
         toast.error(e.message || "Revert failed.");

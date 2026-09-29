@@ -103,26 +103,128 @@ def archive_form(form_name):
     return {"status": "Archived", "form": form_name}
 
 
+#: Everything a version snapshot records about one field. Kept in step with
+#: `FormCompiler.SCHEMA_FIELD_PROPS`; a property missing here is a property the
+#: revert silently drops.
+_REVERTED_FIELD_PROPS = (
+    "field_key",
+    "fieldname",
+    "label",
+    "fieldtype",
+    "reqd",
+    "hidden",
+    "read_only",
+    "options",
+    "default",
+    "placeholder",
+    "max_length",
+    "description",
+    "conditional_logic",
+    "allow_negative",
+    "row_index",
+    "column_index",
+    "cell_index",
+)
+
+#: Form-level properties the snapshot carries, under the names the Form uses.
+_REVERTED_FORM_PROPS = (
+    "title",
+    "description",
+    "success_title",
+    "success_description",
+    "allow_incomplete",
+    "login_required",
+)
+
+
 @frappe.whitelist(methods=["POST"])
 @require_permission("Form", "write", param="form_name")
 def revert_to_version(form_name, version_name):
-    """Restore a form draft schema from a historical version snapshot."""
+    """
+    Put the draft back the way it was when this version was published.
+
+    Restores the fields and their layout, the form's own text, the theme, the
+    success page and the runtime settings -- everything the snapshot holds.
+
+    Two things are deliberately left alone:
+
+    * The route. It is the form's address, not its content: links, embeds and
+      QR codes already out in the world point at it, and quietly moving them is
+      a worse outcome than a route that no longer matches the version.
+    * Publication. Visitors keep getting the version that is live until the
+      author publishes again, so reverting the draft is never a way to take a
+      form down by accident.
+
+    This used to read the snapshot, discard it, and flip the form to Draft --
+    which reported success while changing nothing the author could see, and
+    made a published form look unpublished in the builder.
+    """
 
     version_doc = frappe.get_doc("FP Form Version", version_name)
 
     if version_doc.form != form_name:
         frappe.throw(_("Version does not belong to this form."))
 
+    schema = frappe.parse_json(version_doc.schema_json or "{}")
+    if not schema.get("fields"):
+        frappe.throw(
+            _("Version {0} has no readable snapshot to restore.").format(
+                version_doc.version_number
+            )
+        )
+
+    mapping = frappe.parse_json(version_doc.mapping_json or "{}")
+    runtime = frappe.parse_json(version_doc.runtime_settings_json or "{}")
+
+    # How each field reached the target record lives in the mapping half of the
+    # snapshot, keyed by field_key, not in the schema half.
+    mapped = {
+        row.get("field_key"): row
+        for row in (mapping.get("fields") or [])
+        if row.get("field_key")
+    }
+
     form_doc = frappe.get_doc("Form", form_name)
 
-    # Overwrite the draft schema from the frozen version snapshot
-    import json
-    schema = json.loads(version_doc.schema_json or "{}")
+    for prop in _REVERTED_FORM_PROPS:
+        if prop in schema:
+            form_doc.set(prop, schema[prop])
 
-    form_doc.db_set("status", "Draft")
-    frappe.db.commit()
+    form_doc.theme_overrides_json = version_doc.theme_json or "{}"
+    form_doc.success_schema_json = version_doc.success_schema_json or "{}"
+
+    for prop in ("access_mode", "record_strategy", "success_mode"):
+        if runtime.get(prop):
+            form_doc.set(prop, runtime[prop])
+
+    # The snapshot is the whole field list, so the draft's rows are replaced
+    # rather than merged: a field added since the version has to disappear.
+    form_doc.set("fields", [])
+    for position, snapshot in enumerate(
+        sorted(schema["fields"], key=lambda f: f.get("idx") or 0), start=1
+    ):
+        row = {prop: snapshot.get(prop) for prop in _REVERTED_FIELD_PROPS}
+        row["idx"] = position
+
+        mapping_row = mapped.get(snapshot.get("field_key"))
+        if mapping_row:
+            row["source_type"] = "Target Field"
+            row["target_field"] = mapping_row.get("target_fieldname")
+            row["mapping_type"] = mapping_row.get("mapping_type") or "Direct"
+        else:
+            # Only Target Field rows are recorded in the mapping, so anything
+            # absent from it was not bound to a column.
+            row["source_type"] = "Form Field"
+
+        form_doc.append("fields", row)
+
+    # No explicit commit: Frappe commits the request once it succeeds, so the
+    # whole revert lands or none of it does. Committing here would also escape
+    # the rollback tests rely on, leaving rows behind between runs.
+    form_doc.save(ignore_permissions=True)
 
     return {
         "message": _("Draft reverted to version {0}").format(version_doc.version_number),
         "version_number": version_doc.version_number,
+        "field_count": len(form_doc.fields),
     }
