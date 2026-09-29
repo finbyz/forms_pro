@@ -16,6 +16,8 @@ import json
 import frappe
 from frappe.model.document import Document
 
+from forms_pro.utils.media_links import add_media_links
+
 
 def _as_json_column(value: Any) -> str | None:
     """
@@ -90,6 +92,10 @@ class TargetAdapter:
                     self._set_child_rows(doc, fieldname, value, df.options)
                 elif df.fieldtype == "JSON":
                     doc.set(fieldname, _as_json_column(value))
+                elif df.fieldtype in ("Text Editor", "HTML Editor"):
+                    # A video stored here is dropped by the desk's own editor,
+                    # so a plain link to the same file goes in beside it.
+                    doc.set(fieldname, add_media_links(value))
                 elif isinstance(value, (list, dict)):
                     # Frappe refuses a list on anything but a Table field
                     # ("Value for X cannot be a list"), so serialise it here --
