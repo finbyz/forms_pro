@@ -81,6 +81,23 @@ async function setTargetDoctype(value: string) {
   }
 }
 
+/**
+ * Settings the author is part-way through typing.
+ *
+ * Text settings are written to the form when the input loses focus, and until
+ * then the typed value lives only in `local`. The refill below runs whenever
+ * *anything* on the form changes -- the thank-you description editor right
+ * under the title reports a change as it renders, for one -- and it used to
+ * overwrite every field from the document, which still held the old value. So
+ * text pasted into the thank-you title vanished a moment later. A key in here
+ * is left alone until its own save has run.
+ */
+const editing = new Set<string>();
+
+function markEditing(key: string) {
+  editing.add(key);
+}
+
 // The panel is a local copy of the document, so it has to be refilled whenever
 // the form loads or is replaced by a save response. Without this the controls
 // keep their initial defaults and every visit looks like the change was lost.
@@ -88,7 +105,7 @@ watch(
     () => editFormStore.formData,
     (data) => {
         if (!data) return;
-        local.value = {
+        const fresh = {
             route: data.route ?? "",
             // Keep the two in step: a legacy form may carry login_required
             // without a matching access_mode.
@@ -106,7 +123,12 @@ watch(
             allow_incomplete: !!data.allow_incomplete,
             success_redirect_url: data.success_redirect_url ?? "",
         };
-        routeError.value = "";
+        const merged: Record<string, any> = { ...fresh };
+        for (const key of editing) {
+            merged[key] = (local.value as Record<string, any>)[key];
+        }
+        local.value = merged as typeof local.value;
+        if (!editing.has("route")) routeError.value = "";
     },
     { immediate: true, deep: true }
 );
@@ -180,6 +202,7 @@ function updateSuccessRedirectUrl(val: any) {
 }
 
 function saveSetting(key: string, value: any) {
+  editing.delete(key);
   if (editFormStore.formResource?.doc) {
     editFormStore.formResource.doc[key] = value;
     editFormStore.formResource.isDirty = true;
@@ -250,6 +273,7 @@ ${scriptTag}`;
                     size="sm"
                     v-model="local.route"
                     @blur="validateRoute"
+                    @update:modelValue="markEditing('route')"
                     placeholder="my-form"
                   />
                   <p v-if="routeError" class="text-xs text-ink-red-7">{{ routeError }}</p>
@@ -381,6 +405,7 @@ ${scriptTag}`;
                 placeholder="ENQ-{YYYY}-{#####}"
                 v-model="local.naming_pattern"
                 @change="saveSetting('naming_pattern', local.naming_pattern)"
+                @update:modelValue="markEditing('naming_pattern')"
               />
               <p class="text-xs text-ink-gray-5">
                 Leave blank for generated ID. Tokens: <code class="rounded bg-surface-gray-2 px-1">{#####}</code>, <code class="rounded bg-surface-gray-2 px-1">{YYYY}</code>, <code class="rounded bg-surface-gray-2 px-1">{MM}</code>, <code class="rounded bg-surface-gray-2 px-1">{fieldname}</code>
@@ -418,7 +443,7 @@ ${scriptTag}`;
                 size="sm"
                 placeholder="Thanks for getting in touch"
                 v-model="local.success_title"
-                @change="saveSetting('success_title', local.success_title)"
+                @update:modelValue="(value: string) => saveSetting('success_title', value)"
               />
             </div>
             <div class="flex flex-col gap-2">
@@ -431,6 +456,12 @@ ${scriptTag}`;
                 :bubble-menu="true"
                 @change="
                   (value: string) => {
+                    // The editor reports its own rendering of the content as a
+                    // change on mount -- an empty value comes back as <p></p>.
+                    // That is not an edit, and saving it marked the form dirty.
+                    const blank = (html: string) => !html || html === '<p></p>';
+                    if (value === local.success_description) return;
+                    if (blank(value) && blank(local.success_description)) return;
                     local.success_description = value;
                     saveSetting('success_description', value);
                   }
