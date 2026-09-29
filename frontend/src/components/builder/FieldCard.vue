@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { useEventListener } from "@vueuse/core";
 import type { FormField } from "@/types/formfield";
 import { useEditForm } from "@/stores/editForm";
+import { writeDragPayload } from "@/utils/canvasDropTarget";
 import FieldActions from "@/components/builder/FieldActions.vue";
 import FieldRenderer from "@/components/builder/FieldRenderer.vue";
 
@@ -57,6 +59,39 @@ function mergeWithAbove() {
     editFormStore.moveBesideAbove(props.field);
 }
 
+/**
+ * The card is only draggable once the handle is held.
+ *
+ * `draggable` on a container swallows text selection and click-to-focus inside
+ * it, so an input in the card would stop behaving like an input. Arming it on
+ * the handle's pointerdown keeps both.
+ */
+const canDrag = ref(false);
+const rootEl = ref<HTMLElement | null>(null);
+
+useEventListener(document, "pointerdown", (event: PointerEvent) => {
+    const handle = (event.target as HTMLElement | null)?.closest?.(".handle");
+    canDrag.value = Boolean(handle && rootEl.value?.contains(handle));
+});
+
+useEventListener(document, "pointerup", () => {
+    canDrag.value = false;
+});
+
+function onDragStart(event: DragEvent) {
+    if (!canDrag.value || !props.field.fieldname) {
+        event.preventDefault();
+        return;
+    }
+    writeDragPayload(event, { source: "canvas", fieldname: props.field.fieldname });
+    editFormStore.setDragging(true, props.field.fieldname);
+}
+
+function onDragEnd() {
+    canDrag.value = false;
+    editFormStore.setDragging(false);
+}
+
 function ejectToOwnRow() {
     editFormStore.insertNewRow(props.field, (props.field.row_index ?? 0) + 1);
 }
@@ -64,13 +99,16 @@ function ejectToOwnRow() {
 
 <template>
     <!--
-        The transition is dropped while a drag is running. SortableJS animates
-        the cards it shifts by writing `transform` on them, and a CSS
-        transition on that same property means two systems driving one value --
-        which is the stutter people see when dragging past a card, not slow
-        rendering. Hover and press feedback come back the moment the drag ends.
+        Hover and press feedback are dropped while a drag is running. Nothing
+        on the canvas moves during a drag any more, so this is no longer
+        fixing a stutter -- it just stops every card the pointer crosses from
+        lighting up on the way to the drop.
     -->
     <div
+        ref="rootEl"
+        :draggable="canDrag"
+        @dragstart="onDragStart"
+        @dragend="onDragEnd"
         class="relative flex-1 min-w-0 group cursor-pointer"
         :class="
             props.isDraggingAnyField
@@ -111,7 +149,7 @@ function ejectToOwnRow() {
 </template>
 
 <style scoped>
-/* Nothing of ours may animate while SortableJS is moving the card. */
+/* Nothing reacts to the pointer while a field is being dragged. */
 .fp-card-static,
 .fp-card-static * {
     transition: none !important;

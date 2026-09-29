@@ -4,11 +4,17 @@ import { formFields, FormFields } from "@/utils/form_fields";
 import { ref, computed, watch } from "vue";
 import type { Component } from "vue";
 import type { FormField } from "@/types/formfield";
-import draggableComponent from "vuedraggable";
 import { toast } from "vue-sonner";
 import { createResource } from "frappe-ui";
+import { writeDragPayload } from "@/utils/canvasDropTarget";
 
 const editFormStore = useEditForm();
+
+/** The canvas reads plain `dataTransfer`, so this list is just draggable divs. */
+function onDragStart(event: DragEvent, field: any) {
+    writeDragPayload(event, { source: "doctype", fieldname: field.fieldname });
+    editFormStore.setDragging(true);
+}
 
 const componentMap = formFields.reduce((acc: Record<string, Component>, field: FormFields) => {
     acc[field.name] = field.component;
@@ -23,8 +29,8 @@ const filteredFields = computed(() => {
     });
 });
 
-// vuedraggable binds :list as a mutable array and may splice it, so hand it a
-// real ref rather than the readonly computed.
+// A copy, not the computed itself: the list is read during a drag and should
+// not change underneath it when the search box is typed into.
 const draggableFields = ref<FormField[]>([]);
 watch(filteredFields, (v) => (draggableFields.value = [...v]), { immediate: true });
 
@@ -123,44 +129,34 @@ function addAllRequired() {
                 @click="addAllRequired"
             />
 
-            <!-- pull: 'clone' so the palette entry is copied, never removed. -->
-            <draggableComponent
-                :list="draggableFields"
-                :group="{ name: 'fields', pull: 'clone', put: false }"
-                :sort="false"
-                :clone="(f: any) => ({ ...f, __fromDoctype: true })"
-                item-key="fieldname"
-                tag="div"
-                :animation="150"
-                ghost-class="fp-drag-ghost"
-                class="flex flex-col gap-2"
-                @start="editFormStore.setDragging(true)"
-                @end="editFormStore.setDragging(false)"
-            >
-                <template #item="{ element: field }">
-                    <div
-                        class="p-2 bg-surface-gray-1 rounded-md flex flex-col gap-2 border border-outline-gray-2 hover:border-outline-gray-3 hover:bg-surface-gray-2 cursor-grab active:cursor-grabbing transition-all relative group"
-                    >
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-medium text-ink-gray-7 truncate">{{ field.label }}</span>
-                            <span v-if="field.reqd" class="text-red-500 text-xs leading-none" title="Mandatory">*</span>
-                        </div>
-                        <component
-                            class="pointer-events-none"
-                            variant="outline"
-                            size="sm"
-                            :is="componentMap[field.fieldtype]"
-                        />
-                        <Button
-                            class="absolute top-3 -right-2.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-sm"
-                            variant="outline"
-                            size="sm"
-                            icon="plus"
-                            @click="editFormStore.addFieldFromDoctype(field)"
-                        />
+            <div class="flex flex-col gap-2">
+                <div
+                    v-for="field in draggableFields"
+                    :key="field.fieldname"
+                    draggable="true"
+                    class="p-2 bg-surface-gray-1 rounded-md flex flex-col gap-2 border border-outline-gray-2 hover:border-outline-gray-3 hover:bg-surface-gray-2 cursor-grab active:cursor-grabbing transition-all relative group"
+                    @dragstart="onDragStart($event, field)"
+                    @dragend="editFormStore.setDragging(false)"
+                >
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-medium text-ink-gray-7 truncate">{{ field.label }}</span>
+                        <span v-if="field.reqd" class="text-red-500 text-xs leading-none" title="Mandatory">*</span>
                     </div>
-                </template>
-            </draggableComponent>
+                    <component
+                        class="pointer-events-none"
+                        variant="outline"
+                        size="sm"
+                        :is="componentMap[field.fieldtype]"
+                    />
+                    <Button
+                        class="absolute top-3 -right-2.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-sm"
+                        variant="outline"
+                        size="sm"
+                        icon="plus"
+                        @click="editFormStore.addFieldFromDoctype(field)"
+                    />
+                </div>
+            </div>
 
             <p
                 v-if="filteredFields.length === 0 && search"

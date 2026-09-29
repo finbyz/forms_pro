@@ -43,8 +43,18 @@ export const useEditForm = defineStore("editForm", () => {
   // Add Fields palette or the DocType list. The drop zones are invisible
   // unless this is set, so every drag source has to flip it.
   const isDraggingField = ref(false);
-  function setDragging(value: boolean) {
+  /**
+   * The field currently being dragged, if it is one already on the canvas.
+   *
+   * The drop geometry measures the layout around the pointer and has to leave
+   * this field out: a field cannot be a landmark for deciding where it should
+   * go, and including it makes the indicator stick to where the field already
+   * is.
+   */
+  const draggingFieldname = ref<string | null>(null);
+  function setDragging(value: boolean, fieldname: string | null = null) {
     isDraggingField.value = value;
+    draggingFieldname.value = value ? fieldname : null;
   }
 
   const isError = computed(() => formResource.value?.error || false);
@@ -614,10 +624,10 @@ export const useEditForm = defineStore("editForm", () => {
   }
 
   /**
-   * Drag-and-drop entry point. The sidebar hands SortableJS a *clone* of a
-   * DocType field, which is not a FormField and is not yet in doc.fields — so
-   * moveField/insertCell/insertNewRow would reject it. Push a real field in
-   * first and hand that back for positioning.
+   * Drag-and-drop entry point. A drag from the DocType panel carries only a
+   * fieldname; the field it names is not a FormField and is not yet in
+   * doc.fields, so moveField/insertCell/insertNewRow would reject it. Push a
+   * real field in first and hand that back for positioning.
    */
   function materializeDoctypeField(source: any): FormField | null {
     if (!formResource.value?.doc) return null;
@@ -866,6 +876,7 @@ export const useEditForm = defineStore("editForm", () => {
     hasUnpublishedChanges,
     neverPublished,
     isDraggingField,
+    draggingFieldname,
     setDragging,
     sections,
     isMultiSection,

@@ -391,33 +391,10 @@
 /*
  * Drag and drop on the builder canvas.
  *
- * SortableJS runs in native mode here, the same way the CRM app's field layout
- * editor does: the browser composites the drag image, so there is no JS clone
- * chasing the cursor and nothing to drift when the canvas scrolls. Forcing the
- * fallback was what produced the doubled, half-drawn card -- a cloned element
- * positioned from a scrolling container it had been lifted out of.
- *
- * What is left to style is the placeholder marking where the card will land.
+ * There is almost nothing to style. The canvas no longer reorders itself as
+ * the pointer moves -- a single overlay line marks where the field would land
+ * and the layout is rearranged once, on drop -- so there is no ghost, no
+ * placeholder and no cloned card to keep in order. The line lives in
+ * DropIndicator.vue; the browser draws the card being dragged.
  */
 
-/* The gap showing where the card will land. */
-.fp-drag-ghost {
-    opacity: 0.35;
-    background: var(--surface-blue-1, #eff6ff);
-    border-radius: 0.5rem;
-}
-
-/* The card being held. */
-.fp-drag-chosen {
-    cursor: grabbing;
-}
-
-/*
- * A card being dragged past should not animate its own contents; only the card box
- * moves. Transitions on children are what make a reorder look like it stutters.
- */
-.sortable-drag *,
-.sortable-ghost * {
-    transition: none !important;
-    animation: none !important;
-}

@@ -5,14 +5,14 @@ import { LoadingIndicator } from "frappe-ui";
 // Same reason as the field registry: keep ProseMirror out of the eager graph.
 const TextEditor = defineAsyncComponent(() => import("@/components/fields/TextEditor.vue"));
 import { onClickOutside, useEventListener } from "@vueuse/core";
-import draggableComponent from "vuedraggable";
 
 import { useEditForm } from "@/stores/editForm";
 import { useGroupedRows } from "@/composables/useGroupedRows";
 import type { FormField } from "@/types/formfield";
 import FieldCard from "@/components/builder/FieldCard.vue";
-import RowDropZone from "@/components/builder/RowDropZone.vue";
-import ColumnDropZone from "@/components/builder/ColumnDropZone.vue";
+import DropIndicator from "@/components/builder/DropIndicator.vue";
+import { resolveDropTarget, type DropTarget } from "@/utils/dropGeometry";
+import { readDragPayload, readRows, type DragPayload } from "@/utils/canvasDropTarget";
 import SectionNavBar from "@/components/builder/SectionNavBar.vue";
 import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
 
@@ -20,11 +20,18 @@ const editFormStore = useEditForm();
 
 const fieldContentRef = ref<HTMLElement | null>(null);
 const isDraggingField = computed(() => editFormStore.isDraggingField);
-// SortableJS needs a backing list for the empty-canvas drop target.
-const emptyBuffer = ref<FormField[]>([]);
+
+/**
+ * Where the dragged field would land, recomputed as the pointer moves.
+ *
+ * This is the only thing that changes during a drag. The canvas itself is
+ * untouched until the drop, which is what keeps it still.
+ */
+const dropTarget = ref<DropTarget | null>(null);
 
 function resetDragState() {
     editFormStore.setDragging(false);
+    dropTarget.value = null;
 }
 
 useEventListener(document, "pointerup", () => {
@@ -62,63 +69,76 @@ function colIndexOf(col: FormField[], cIdx: number): number {
     return col[0]?.column_index ?? cIdx;
 }
 
-/**
- * A drop can carry either an existing form field (a move) or a clone of a
- * DocType field from the sidebar (a new field). The store's positioning
- * helpers only accept fields already in doc.fields, so materialize first.
- */
-function resolveDropped(element: any): FormField | null {
-    if (!element) return null;
-    if (editFormStore.isFormField(element)) return element;
-    if (element.__fromDoctype) return editFormStore.materializeDoctypeField(element);
-    if (element.__newFieldtype) return editFormStore.materializeNewField(element.__newFieldtype);
+/** The field a canvas drag is carrying, or null while dragging in a new one. */
+function fieldFromPayload(payload: DragPayload): FormField | null {
+    if (payload.source === "canvas") {
+        return (
+            editFormStore.fields.find((f: FormField) => f.fieldname === payload.fieldname) ?? null
+        );
+    }
+    if (payload.source === "palette") return editFormStore.materializeNewField(payload.fieldtype);
+    if (payload.source === "doctype") {
+        const available = editFormStore.doctypeFields ?? [];
+        const source = available.find((f: any) => f.fieldname === payload.fieldname);
+        return source ? editFormStore.materializeDoctypeField(source) : null;
+    }
     return null;
 }
 
-function onEmptyCanvasDrop(evt: any) {
-    if (!evt.added) return;
-    const field = resolveDropped(evt.added.element);
-    if (field) editFormStore.insertNewRow(field, 0);
-    emptyBuffer.value = [];
-    resetDragState();
+/**
+ * Work out where the field would land and move the indicator there.
+ *
+ * Nothing is written to the form here. Measuring is all that happens on a
+ * pointer move, which is the whole point of doing it this way.
+ */
+function onCanvasDragOver(event: DragEvent) {
+    if (!isDraggingField.value) return;
+    event.preventDefault();
+
+    const canvas = fieldContentRef.value;
+    if (!canvas) return;
+
+    const rows = readRows(canvas, editFormStore.draggingFieldname ?? undefined);
+    dropTarget.value = resolveDropTarget(rows, event.clientX, event.clientY);
 }
 
-function onCellChange(evt: any, rowIndex: number, colIndex: number) {
-    if (evt.moved) {
-        // Reorder cells within same column: renumber cell_index by new position
-        const { element, newIndex } = evt.moved;
-        const cells: FormField[] = editFormStore.fields
-            .filter(
-                (f: FormField) =>
-                    (f.row_index ?? 0) === rowIndex && (f.column_index ?? 0) === colIndex
-            )
-            .sort((a: FormField, b: FormField) => (a.cell_index ?? 0) - (b.cell_index ?? 0));
-        const oldIdx = cells.indexOf(element);
-        if (oldIdx === -1) return;
-        cells.splice(oldIdx, 1);
-        cells.splice(newIndex, 0, element);
-        cells.forEach((f: FormField, i: number) => {
-            f.cell_index = i;
-        });
-    } else if (evt.added) {
-        // Field dropped into this column from elsewhere — stack into column at cell index
-        const field = resolveDropped(evt.added.element);
-        if (field) editFormStore.insertCell(field, rowIndex, colIndex, evt.added.newIndex);
-        resetDragState();
+function onCanvasDragLeave(event: DragEvent) {
+    // `relatedTarget` is what the pointer moved onto; staying inside the canvas
+    // fires dragleave for every child crossed, which would flicker the line.
+    const leaving = event.relatedTarget as Node | null;
+    if (leaving && fieldContentRef.value?.contains(leaving)) return;
+    dropTarget.value = null;
+}
+
+function onCanvasDrop(event: DragEvent) {
+    event.preventDefault();
+
+    const payload = readDragPayload(event);
+    const target = dropTarget.value;
+    resetDragState();
+    if (!payload) return;
+
+    const field = fieldFromPayload(payload);
+    if (!field) return;
+
+    // An empty canvas has no geometry to read, so the first field starts row 0.
+    if (!target) {
+        if (!editFormStore.fields.length) editFormStore.insertNewRow(field, 0);
+        return;
     }
-    // evt.removed: no-op — target column's evt.added owns the move
-}
 
-function onColumnZoneDrop(dropped: FormField, atRow: number, atCol: number) {
-    const field = resolveDropped(dropped);
-    if (field) editFormStore.moveField(field, atRow, atCol);
-    resetDragState();
-}
-
-function onRowZoneDrop(dropped: FormField, atRow: number) {
-    const field = resolveDropped(dropped);
-    if (field) editFormStore.insertNewRow(field, atRow);
-    resetDragState();
+    if (target.kind === "row") {
+        editFormStore.insertNewRow(field, target.rowIndex);
+    } else if (target.kind === "column") {
+        editFormStore.moveField(field, target.rowIndex, target.columnIndex ?? 0);
+    } else {
+        editFormStore.insertCell(
+            field,
+            target.rowIndex,
+            target.columnIndex ?? 0,
+            target.cellIndex ?? 0
+        );
+    }
 }
 
 // Function to check if an element is a dropdown/popover (including portals)
@@ -225,10 +245,19 @@ onClickOutside(fieldContentRef, (event) => {
                     <SuccessCanvas />
                 </div>
 
+                <!--
+                    One drop surface for the whole canvas, rather than a
+                    SortableJS list per column and per gap. Dragover only
+                    measures and moves the indicator; the form is rearranged
+                    once, on drop.
+                -->
                 <div
                     v-else-if="editFormStore.formData"
                     ref="fieldContentRef"
                     class="max-w-[960px] mx-auto bg-surface-base border border-outline-gray-1 rounded-6 shadow-sm my-6 mb-24"
+                    @dragover="onCanvasDragOver"
+                    @dragleave="onCanvasDragLeave"
+                    @drop="onCanvasDrop"
                 >
                     <div class="p-8">
                         <div class="flex flex-col gap-3 mb-8">
@@ -252,12 +281,8 @@ onClickOutside(fieldContentRef, (event) => {
                             />
                         </div>
                         <hr class="border-outline-gray-1 -mx-8 mb-8" />
-                        <draggableComponent
+                        <div
                             v-if="groupedRows.length === 0"
-                            :list="emptyBuffer"
-                            :group="{ name: 'fields', put: true, pull: false }"
-                            item-key="fieldname"
-                            tag="div"
                             data-form-builder-component="empty-canvas-drop-zone"
                             :class="[
                                 'flex flex-col gap-4 p-8 min-h-48 items-center justify-center rounded-6 text-center border-2 border-dashed transition-colors duration-150 ease-out motion-reduce:transition-none',
@@ -265,109 +290,42 @@ onClickOutside(fieldContentRef, (event) => {
                                     ? 'bg-surface-blue-1 border-outline-blue-2'
                                     : 'bg-surface-gray-1 border-outline-gray-2',
                             ]"
-                            @change="onEmptyCanvasDrop"
                         >
-                            <template #header>
-                                <p class="text-sm-medium text-ink-gray-6">Add fields to design your form</p>
-                                <p class="text-xs text-ink-gray-5">
-                                    Drag fields in from the sidebar, or click the + on one
-                                </p>
-                            </template>
-                            <template #item="{}"></template>
-                        </draggableComponent>
+                            <p class="text-sm-medium text-ink-gray-6">Add fields to design your form</p>
+                            <p class="text-xs text-ink-gray-5">
+                                Drag fields in from the sidebar, or click the + on one
+                            </p>
+                        </div>
                         <div class="flex flex-col" v-else>
-                            <!--
-                                The drop zones exist only while something is
-                                being dragged. Each one is its own SortableJS
-                                instance, and the row zones each run a
-                                MutationObserver, so on a long form they added
-                                up to well over a hundred live instances
-                                sitting idle -- paid for on every scroll and
-                                every click. `isDraggingField` is set on drag
-                                start, before the first dragover, so they are
-                                mounted by the time a drop could land.
-                            -->
                             <template v-for="(row, rIdx) in groupedRows" :key="rowIndexOf(row, rIdx)">
-                                <RowDropZone
-                                    v-if="isDraggingField"
-                                    :atRow="rowIndexOf(row, rIdx)"
-                                    :isDragging="isDraggingField"
-                                    @drop="onRowZoneDrop"
-                                />
                                 <div
                                     class="flex flex-row items-stretch gap-5 mb-5 last:mb-0"
                                     data-form-builder-component="form-row"
                                     :data-row-index="rowIndexOf(row, rIdx)"
                                 >
-                                    <template
+                                    <div
                                         v-for="(col, cIdx) in row"
                                         :key="`${rowIndexOf(row, rIdx)}-${colIndexOf(col, cIdx)}`"
+                                        data-form-builder-component="cell-column"
+                                        :data-row-index="rowIndexOf(row, rIdx)"
+                                        :data-col-index="colIndexOf(col, cIdx)"
+                                        class="flex flex-col gap-5 flex-1 min-w-0"
                                     >
-                                        <ColumnDropZone
-                                            v-if="isDraggingField"
-                                            :atRow="rowIndexOf(row, rIdx)"
-                                            :atCol="colIndexOf(col, cIdx)"
-                                            :isDragging="isDraggingField"
-                                            @drop="onColumnZoneDrop"
+                                        <FieldCard
+                                            v-for="field in col"
+                                            :key="fieldKey(field)"
+                                            :field="field"
+                                            :isDraggingAnyField="isDraggingField"
                                         />
-                                        <draggableComponent
-                                            :list="[...col]"
-                                            :group="{ name: 'fields' }"
-                                            :item-key="fieldKey"
-                                            :animation="150"
-                                            handle=".handle"
-                                            ghost-class="fp-drag-ghost"
-                                            chosen-class="fp-drag-chosen"
-                                            tag="div"
-                                            direction="vertical"
-                                            :swap-threshold="0.65"
-                                            :invert-swap="true"
-                                            :empty-insert-threshold="28"
-                                            :scroll-sensitivity="90"
-                                            :scroll-speed="18"
-                                            :bubble-scroll="true"
-                                            data-form-builder-component="cell-column"
-                                            :data-row-index="rowIndexOf(row, rIdx)"
-                                            :data-col-index="colIndexOf(col, cIdx)"
-                                            class="flex flex-col gap-5 flex-1 min-w-0"
-                                            @change="
-                                            (evt: any) =>
-                                                onCellChange(
-                                                    evt,
-                                                    rowIndexOf(row, rIdx),
-                                                    colIndexOf(col, cIdx)
-                                                )
-                                        "
-                                            @start="editFormStore.setDragging(true)"
-                                            @end="editFormStore.setDragging(false)"
-                                        >
-                                            <template #item="{ element: field }">
-                                                <FieldCard
-                                                    :field="field"
-                                                    :isDraggingAnyField="isDraggingField"
-                                                />
-                                            </template>
-                                        </draggableComponent>
-                                    </template>
-                                    <ColumnDropZone
-                                        v-if="isDraggingField"
-                                        :atRow="rowIndexOf(row, rIdx)"
-                                        :atCol="row.length"
-                                        :isDragging="isDraggingField"
-                                        @drop="onColumnZoneDrop"
-                                    />
+                                    </div>
                                 </div>
-                                <RowDropZone
-                                    v-if="isDraggingField && rIdx === groupedRows.length - 1"
-                                    :atRow="rowIndexOf(row, rIdx) + 1"
-                                    :isDragging="isDraggingField"
-                                    @drop="onRowZoneDrop"
-                                />
                             </template>
                         </div>
                     </div>
                 </div>
             </div>
         </template>
+
+        <DropIndicator :indicator="dropTarget?.indicator ?? null" />
     </div>
 </template>

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import draggableComponent from "vuedraggable";
 import { FormControl } from "frappe-ui";
 import { ChevronRight } from "@lucide/vue";
 import { formFields, type FormFields } from "@/utils/form_fields";
 import { Fieldtype } from "@/types/FormsPro/form_field.types";
 import { useEditForm } from "@/stores/editForm";
+import { writeDragPayload } from "@/utils/canvasDropTarget";
 
 const editFormStore = useEditForm();
 const search = ref("");
@@ -122,14 +122,19 @@ function toggle(label: string) {
     }
 }
 
-// SortableJS mutates the bound list, so hand each group its own array.
-function listFor(fields: FormFields[]) {
-    return [...fields];
+/**
+ * Start a native drag carrying the field type.
+ *
+ * The palette used to be a SortableJS list cloning items into the canvas's
+ * own lists. The canvas reads plain `dataTransfer` now, so the sidebar is just
+ * a set of draggable buttons -- no second drag engine, and nothing to keep in
+ * step between the two.
+ */
+function onDragStart(event: DragEvent, field: FormFields) {
+    writeDragPayload(event, { source: "palette", fieldtype: field.name });
+    editFormStore.setDragging(true);
 }
 
-function cloneField(f: FormFields) {
-    return { __newFieldtype: f.name, label: f.name };
-}
 </script>
 
 <template>
@@ -150,31 +155,21 @@ function cloneField(f: FormFields) {
         />
 
         <!-- Flat list while searching -->
-        <draggableComponent
-            v-if="hasSearch"
-            :list="listFor(searchResults)"
-            :group="{ name: 'fields', pull: 'clone', put: false }"
-            :sort="false"
-            :clone="cloneField"
-            item-key="name"
-            tag="div"
-            :animation="150"
-            ghost-class="fp-drag-ghost"
-            class="flex flex-col gap-1"
-            @start="editFormStore.setDragging(true)"
-            @end="editFormStore.setDragging(false)"
-        >
-            <template #item="{ element: field }">
+        <div v-if="hasSearch" class="flex flex-col gap-1">
+            <template v-for="field in searchResults" :key="field.name">
                 <button
                     type="button"
+                    draggable="true"
                     class="flex w-full items-center gap-2.5 px-3 py-2 bg-surface-gray-1/70 rounded-lg border border-outline-gray-1 hover:border-outline-gray-2 hover:bg-surface-white hover:shadow-2xs active:scale-[0.98] cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-outline-gray-3 transition-all duration-150 text-left"
                     @click="editFormStore.addField(field.name)"
+                    @dragstart="onDragStart($event, field)"
+                    @dragend="editFormStore.setDragging(false)"
                 >
                     <component :is="field.icon" class="w-4 h-4 text-ink-gray-6 shrink-0" aria-hidden="true" />
                     <span class="text-sm font-medium text-ink-gray-8 truncate">{{ field.name }}</span>
                 </button>
             </template>
-        </draggableComponent>
+        </div>
 
         <p v-if="hasSearch && searchResults.length === 0" class="text-xs text-ink-gray-5 text-center py-4">
             No fields match "{{ search }}"
@@ -197,31 +192,21 @@ function cloneField(f: FormFields) {
                     {{ group.label }}
                 </button>
 
-                <draggableComponent
-                    v-show="!collapsed[group.label]"
-                    :list="listFor(group.fields)"
-                    :group="{ name: 'fields', pull: 'clone', put: false }"
-                    :sort="false"
-                    :clone="cloneField"
-                    item-key="name"
-                    tag="div"
-                    :animation="200"
-                    ghost-class="opacity-50"
-                    class="flex flex-col gap-1"
-                    @start="editFormStore.setDragging(true)"
-                    @end="editFormStore.setDragging(false)"
-                >
-                    <template #item="{ element: field }">
+                <div v-show="!collapsed[group.label]" class="flex flex-col gap-1">
+                    <template v-for="field in group.fields" :key="field.name">
                         <button
-                            type="button"
+                                type="button"
+                            draggable="true"
                             class="flex w-full items-center gap-2.5 px-3 py-2 bg-surface-gray-1/70 rounded-lg border border-outline-gray-1 hover:border-outline-gray-2 hover:bg-surface-white hover:shadow-2xs active:scale-[0.98] cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-outline-gray-3 transition-all duration-150 text-left"
                             @click="editFormStore.addField(field.name)"
+                            @dragstart="onDragStart($event, field)"
+                            @dragend="editFormStore.setDragging(false)"
                         >
                             <component :is="field.icon" class="w-4 h-4 text-ink-gray-6 shrink-0" aria-hidden="true" />
                             <span class="text-sm font-medium text-ink-gray-8 truncate">{{ field.name }}</span>
                         </button>
                     </template>
-                </draggableComponent>
+                </div>
             </div>
         </template>
     </div>
