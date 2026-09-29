@@ -41,7 +41,10 @@ const props = withDefaults(
         // files for None Doctype" -- so no visitor could add one.
         uploadArgs: () => ({
             doctype: "FP Form Submission",
-            private: true,
+            // Public for the same reason as the Attach field: a private file is
+            // never served to a guest, so the image or video would not play
+            // back for the person who just added it.
+            private: false,
             folder: "Home/Attachments",
         }),
         field: undefined,

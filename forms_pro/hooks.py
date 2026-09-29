@@ -148,6 +148,13 @@ doc_events = {
     },
 }
 
+# A form upload has to be readable by the visitor who made it, which Frappe only
+# allows for public files -- so it is made public and given an unguessable name.
+# A doc event cannot do this; see the module for why.
+override_doctype_class = {
+    "File": "forms_pro.services.uploads.guest_files.FormsProFile",
+}
+
 # Scheduled Tasks
 # ---------------
 

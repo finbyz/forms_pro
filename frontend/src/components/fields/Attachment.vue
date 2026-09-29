@@ -82,7 +82,11 @@ const displaySize = computed(() => fileData.value?.file_size ?? null);
 // uploads open site-wide.
 const uploadArgs = {
     doctype: "FP Form Submission",
-    private: true,
+    // Public, because Frappe refuses a private file to a guest outright -- the
+    // visitor could not see back the file they had just attached. The server
+    // gives every form upload a random name so the URL cannot be guessed; see
+    // forms_pro/services/uploads/guest_files.py.
+    private: false,
     folder: "Home/Attachments",
 };
 
