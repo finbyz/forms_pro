@@ -48,9 +48,12 @@ async function onZoneChange(evt: any) {
         ref="draggableRef"
         :list="buffer"
         :group="{ name: 'fields', put: true, pull: false }"
+        :empty-insert-threshold="28"
+        :scroll-sensitivity="90"
+        :scroll-speed="18"
+        :bubble-scroll="true"
         item-key="fieldname"
         tag="div"
-        :force-fallback="true"
         data-form-builder-component="row-drop-zone"
         :data-at-row="props.atRow"
         :class="[

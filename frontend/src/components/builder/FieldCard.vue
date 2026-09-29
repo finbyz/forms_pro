@@ -63,8 +63,20 @@ function ejectToOwnRow() {
 </script>
 
 <template>
+    <!--
+        The transition is dropped while a drag is running. SortableJS animates
+        the cards it shifts by writing `transform` on them, and a CSS
+        transition on that same property means two systems driving one value --
+        which is the stutter people see when dragging past a card, not slow
+        rendering. Hover and press feedback come back the moment the drag ends.
+    -->
     <div
-        class="relative flex-1 min-w-0 transition-all duration-200 ease-out group cursor-pointer hover:shadow-sm active:scale-[0.99]"
+        class="relative flex-1 min-w-0 group cursor-pointer"
+        :class="
+            props.isDraggingAnyField
+                ? 'fp-card-static'
+                : 'transition-all duration-200 ease-out hover:shadow-sm active:scale-[0.99]'
+        "
         data-form-builder-component="field-card"
         :data-field-label="props.field.label ?? ''"
         :data-field-name="props.field.fieldname ?? ''"
@@ -72,7 +84,11 @@ function ejectToOwnRow() {
         :data-col-index="props.field.column_index ?? 0"
         :data-cell-index="props.field.cell_index ?? 0"
         @click="editFormStore.selectField(props.field)"
-        style="transition-property: transform, box-shadow; transition-timing-function: ease-out;"
+        :style="
+            props.isDraggingAnyField
+                ? undefined
+                : 'transition-property: transform, box-shadow; transition-timing-function: ease-out;'
+        "
     >
         <FieldActions
             :isSelected="editFormStore.selectedField === props.field"
@@ -95,6 +111,13 @@ function ejectToOwnRow() {
 </template>
 
 <style scoped>
+/* Nothing of ours may animate while SortableJS is moving the card. */
+.fp-card-static,
+.fp-card-static * {
+    transition: none !important;
+    animation: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .transition-all {
         transition: none !important;
