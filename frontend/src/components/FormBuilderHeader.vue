@@ -202,9 +202,16 @@ const moreDropdownOptions = computed(() => [
 
 <template>
     <header class="bg-surface-base border-b border-outline-gray-1 sticky top-0 z-20 shrink-0" data-form-builder-component="form-builder-header">
-        <div class="flex justify-between items-center px-4 sm:px-6 h-14 gap-3">
+        <!--
+            Three parts, with the outer two sharing the leftover width equally
+            (`flex-1 basis-0`) so the tabs sit in the middle of the header
+            rather than the middle of whatever space is left. `justify-between`
+            alone moved them rightwards as the form name grew, which is why a
+            long title pushed the tabs off centre.
+        -->
+        <div class="flex items-center px-4 sm:px-6 h-14 gap-3">
             <!-- Left: Back, Logo, Form Title -->
-            <div class="flex items-center gap-3 min-w-0">
+            <div class="flex flex-1 basis-0 items-center gap-3 min-w-0">
                 <!-- Back -->
                 <Tooltip text="Back to form overview" placement="bottom">
                     <Button
@@ -269,7 +276,7 @@ const moreDropdownOptions = computed(() => [
             </nav>
 
             <!-- Right side actions -->
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex flex-1 basis-0 items-center justify-end gap-2 min-w-0">
                 <Tooltip text="Preview" placement="bottom">
                     <Button variant="ghost" size="sm" icon="play" @click="showPreview = true" />
                 </Tooltip>
