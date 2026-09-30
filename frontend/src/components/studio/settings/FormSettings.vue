@@ -453,7 +453,8 @@ ${scriptTag}`;
                 size="sm"
                 placeholder="Thanks for getting in touch"
                 v-model="local.success_title"
-                @update:modelValue="(value: string) => saveSetting('success_title', value)"
+                @update:modelValue="markEditing('success_title')"
+                @blur="saveSetting('success_title', local.success_title)"
               />
             </div>
             <div class="flex flex-col gap-2">

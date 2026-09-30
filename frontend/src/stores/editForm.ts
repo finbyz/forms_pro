@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { canonicalHtml } from "@/utils/html_equivalence";
+import { sameDoc } from "@/utils/doc_equivalence";
 import { ref, computed, watch, onUnmounted, nextTick } from "vue";
 import { createDocumentResource, createResource } from "frappe-ui";
 import {
@@ -29,7 +30,13 @@ export const useEditForm = defineStore("editForm", () => {
   const currentFormId = ref<string | null>(null);
   const selectedField = ref<FormField | null>(null);
   const activeSectionIndex = ref<number | 'success'>(0);
-  const isUnsaved = computed(() => formResource.value?.isDirty || false);
+  // "Unsaved" means the content differs from the saved copy, not merely its
+  // bytes -- see utils/doc_equivalence.ts for the loop the raw flag caused.
+  const isUnsaved = computed(
+    () =>
+      Boolean(formResource.value?.isDirty) &&
+      !sameDoc(formResource.value?.doc, formResource.value?.originalDoc)
+  );
   const isLoading = computed(() => formResource.value?.loading || false);
   const isSaving = computed(
     () => formResource.value?.setValue?.loading || false
