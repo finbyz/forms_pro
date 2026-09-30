@@ -95,9 +95,14 @@ def duplicate_form(form_name):
 @frappe.whitelist(methods=["POST"])
 @require_permission("Form", "write", param="form_name")
 def archive_form(form_name):
-    """Archive a form — soft-delete that hides from public routes."""
+    """Archive a form — soft-delete that hides from public routes.
 
-    frappe.db.set_value("Form", form_name, "status", "Archived")
+    Sets both ``status`` and ``is_published`` so the form is completely
+    offline: the public load endpoint rejects it on ``is_published``, and the
+    submit endpoint rejects it on ``status == 'Archived'``.
+    """
+
+    frappe.db.set_value("Form", form_name, {"status": "Archived", "is_published": 0})
     frappe.db.commit()
 
     return {"status": "Archived", "form": form_name}

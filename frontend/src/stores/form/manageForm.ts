@@ -147,7 +147,7 @@ export const useManageForm = defineStore("manageForm", () => {
   function removeAccess(userEmail: string) {
     const _removeAccess = createResource({
       url: "forms_pro.api.form.remove_form_access",
-      method: "DELETE",
+      method: "POST",
       makeParams() {
         return {
           form_id: currentFormId.value,
