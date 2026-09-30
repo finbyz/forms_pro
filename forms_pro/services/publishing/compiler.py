@@ -55,6 +55,12 @@ class FormCompiler:
         "description",
         "conditional_logic",
         "allow_negative",
+        # Where the answer goes. A submission is validated and mapped against
+        # the version it was made on, so the mapping belongs in the snapshot;
+        # the public view strips these before a visitor sees the form.
+        "target_field",
+        "source_type",
+        "mapping_type",
         "row_index",
         "column_index",
         "cell_index",

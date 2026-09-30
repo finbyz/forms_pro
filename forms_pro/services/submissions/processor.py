@@ -19,17 +19,30 @@ from forms_pro.utils.form_generator import (
     SUBMISSION_STATUS_FIELDOPTIONS,
 )
 from forms_pro.services.publishing.compiler import FormCompiler
+from forms_pro.services.publishing.published_fields import published_fields, resolve_version
 
 
 class SubmissionProcessor:
     """Orchestrates form submission: validate, map, persist target, log result."""
 
-    def __init__(self, form_id: str, form_data: dict[str, Any], metadata: dict[str, Any] | None = None, status: str = "Submitted") -> None:
+    def __init__(
+        self,
+        form_id: str,
+        form_data: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+        status: str = "Submitted",
+        version: str | None = None,
+        fields: list | None = None,
+    ) -> None:
         self.form_id = form_id
         self.form_data = form_data
         self.metadata = metadata or {}
         self.status = status
         self.form_doc = frappe.get_doc("Form", form_id)
+        # The published version the answers were given on, and its fields.
+        # Validation and mapping use these, not the draft (FB-LOG-01).
+        self.version = resolve_version(self.form_doc, version)
+        self.fields = fields if fields is not None else published_fields(self.form_doc, self.version)
 
     def process(self) -> dict[str, Any]:
         submission = self._create_submission_record()
@@ -56,6 +69,13 @@ class SubmissionProcessor:
             target_doc = adapter.prepare_document(mapped_data)
             adapter.after_mapping(target_doc, mapped_data)
             self._stamp_tracking_fields(target_doc, submission.name)
+            if self.form_doc.owns_target_doctype():
+                # A form-owned DocType mirrors the draft on every save, required
+                # flags included, while visitors fill in the published version.
+                # Which answers are required is the published form's call, and
+                # it was checked above -- including required-only-when-shown
+                # fields, which a column-level mandatory cannot express.
+                target_doc.flags.ignore_mandatory = True
             target_doc = adapter.persist(target_doc, self.form_doc.record_strategy or "Create New")
 
             self._update_target_ref(submission.name, target_doc.name, self.form_doc.record_strategy or "Create")
@@ -160,8 +180,7 @@ class SubmissionProcessor:
             target_doc.set("fp_submission_link", links["submission_link"])
 
     def _resolve_version(self) -> str | None:
-        latest = frappe.get_all("FP Form Version", filters={"form": self.form_id}, order_by="creation desc", limit=1)
-        return latest[0].name if latest else None
+        return self.version
 
     def _validate_form(self) -> None:
         if not self.form_doc.target_doctype:
@@ -179,7 +198,7 @@ class SubmissionProcessor:
             # it at module scope would make services depend on api at import time.
             from forms_pro.api.submission.endpoints import _validate_form_response
 
-            _validate_form_response(self.form_doc, self.form_data)
+            _validate_form_response(self.form_doc, self.form_data, self.fields)
 
     def _map_to_target(self) -> dict[str, Any]:
         """
@@ -199,7 +218,7 @@ class SubmissionProcessor:
         target_meta = frappe.get_meta(self.form_doc.target_doctype)
         mapped: dict[str, Any] = {}
 
-        for field in self.form_doc.fields:
+        for field in self.fields:
             # A field added from the palette carries no `target_field`; the
             # builder only fills that in when a DocType column is picked. When
             # the form's own fieldname matches a column on the target, that is

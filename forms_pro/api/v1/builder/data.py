@@ -212,7 +212,14 @@ def revert_to_version(form_name, version_name):
         row["idx"] = position
 
         mapping_row = mapped.get(snapshot.get("field_key"))
-        if mapping_row:
+        if "target_field" in snapshot:
+            # Snapshots carry each field's mapping themselves now; the mapping
+            # half is keyed by field_key, which older rows never received.
+            for prop in ("target_field", "source_type", "mapping_type"):
+                row[prop] = snapshot.get(prop)
+            row["source_type"] = row["source_type"] or "Form Field"
+            row["mapping_type"] = row["mapping_type"] or "Direct"
+        elif mapping_row:
             row["source_type"] = "Target Field"
             row["target_field"] = mapping_row.get("target_fieldname")
             row["mapping_type"] = mapping_row.get("mapping_type") or "Direct"

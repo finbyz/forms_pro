@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import frappe
 from frappe import _
+from forms_pro.services.publishing.published_fields import published_fields, resolve_version
 from forms_pro.services.submissions.processor import SubmissionProcessor
 from frappe.share import add_docshare
 
@@ -248,15 +249,19 @@ def _length_error(form_field, target_meta, value) -> str | None:
     return None
 
 
-def _validate_form_response(form: "Form", form_data: dict) -> None:
+def _validate_form_response(form: "Form", form_data: dict, fields: list | None = None) -> None:
     """
     Validate required and conditionally-required fields server-side.
 
     Mirrors the shouldFieldBeVisible / shouldFieldBeRequired logic in
     frontend/src/utils/conditionals.ts so that direct API calls cannot
     bypass frontend validation.
+
+    `fields` is the published version's field list the visitor filled in;
+    without it the form's own fields are used.
     """
-    field_map = {f.fieldname: f for f in form.fields}
+    fields = form.fields if fields is None else fields
+    field_map = {f.fieldname: f for f in fields}
     errors: list[str] = []
     # `getattr`, not attribute access: this runs against a form stub in tests
     # and against forms that have no target at all.
@@ -267,11 +272,11 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
         else None
     )
 
-    for field in form.fields:
+    for field in fields:
         if field.fieldtype in _DISPLAY_ONLY_FIELDTYPES:
             continue
         targeting_rules = []
-        for other in form.fields:
+        for other in fields:
             if not other.conditional_logic:
                 continue
             try:
@@ -286,7 +291,7 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
             is_targeted = field.fieldname in targets
             if not is_targeted:
                 for tgt in targets:
-                    governed = _get_governed_fieldnames(tgt, form.fields, trigger_fields)
+                    governed = _get_governed_fieldnames(tgt, fields, trigger_fields)
                     if field.fieldname in governed:
                         is_targeted = True
                         break
@@ -354,6 +359,7 @@ def submit_form_response(
     form_data: list[dict],
     submission_status: str = SubmissionStatus.SUBMITTED.value,
     captcha_token: str | None = None,
+    form_version: str | None = None,
 ) -> str:
     """
     Submit a form response
@@ -362,6 +368,7 @@ def submit_form_response(
         form_id: The ID of the form
         form_data: The data of the form
         submission_status: The status of the submission: Default is `Submitted`
+        form_version: The published version the visitor's page was rendered from
 
     Returns:
         The name of the submission
@@ -415,14 +422,26 @@ def submit_form_response(
 
         form_data_dict = {item["fieldname"]: item["value"] for item in form_data}
 
+        # The visitor filled in the published version, so that is what the
+        # answers are whitelisted, validated and mapped against -- never the
+        # draft the author may be part-way through editing.
+        version = resolve_version(form, form_version)
+        fields = published_fields(form, version)
+
         # Whitelist to declared form fields only
-        allowed_fieldnames = {f.fieldname for f in form.fields}
+        allowed_fieldnames = {f.fieldname for f in fields}
         form_data_dict = {k: v for k, v in form_data_dict.items() if k in allowed_fieldnames}
 
         if status == SubmissionStatus.SUBMITTED:
-            _validate_form_response(form, form_data_dict)
+            _validate_form_response(form, form_data_dict, fields)
 
-        processor = SubmissionProcessor(form_id=form_id, form_data=form_data_dict, status=status.value)
+        processor = SubmissionProcessor(
+            form_id=form_id,
+            form_data=form_data_dict,
+            status=status.value,
+            version=version,
+            fields=fields,
+        )
         result = processor.process()
 
         return result["submission_id"]

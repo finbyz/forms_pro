@@ -300,6 +300,9 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
             ? SubmissionStatus.DRAFT
             : SubmissionStatus.SUBMITTED,
           captcha_token: captchaToken,
+          // The published version this page was rendered from, so the answers
+          // are checked against the fields the visitor actually saw.
+          form_version: formResource.value.data.active_version ?? null,
         };
       },
       onSuccess(data: any) {
