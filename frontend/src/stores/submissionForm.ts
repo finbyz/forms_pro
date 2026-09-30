@@ -7,6 +7,8 @@ import { FormField } from "@/types/formfield";
 import {
   shouldFieldBeRequired,
   shouldFieldBeVisible,
+  isBooleanFieldType,
+  toBoolean,
 } from "@/utils/conditionals";
 import { useFormSteps } from "@/composables/useFormSteps";
 import { validatePhoneWithServer } from "@/utils/phone_validation";
@@ -157,6 +159,13 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
 
     let _fields: Record<string, any> = {};
     formResource.value.data.fields.forEach((field: FormField) => {
+      // A switch or checkbox starts as a real boolean: a Frappe Check default
+      // arrives as the string "0", which is truthy in JavaScript and was drawn
+      // ticked. See RenderField for the rest of the story.
+      if (isBooleanFieldType(field.fieldtype)) {
+        _fields[field.fieldname] = toBoolean(field.default);
+        return;
+      }
       _fields[field.fieldname] = "";
       if (field.default) {
         _fields[field.fieldname] = field.default;

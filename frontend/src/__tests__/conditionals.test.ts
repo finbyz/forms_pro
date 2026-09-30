@@ -115,3 +115,21 @@ describe("a rule triggered from outside the step it targets", () => {
     expect(visible(fields, { first_name: "yes" })).toContain("customer");
   });
 });
+
+describe("boolean answers", () => {
+  /**
+   * Switches and checkboxes are handed `toBoolean(value)`. The form holds `""`
+   * for a blank answer and a DocType's Check default arrives as `"0"`; handed
+   * over raw, Vue cast `""` to true on the switch's Boolean prop and `"0"` was
+   * drawn ticked, so what the visitor saw was not what got submitted.
+   */
+  it("reads the values the form actually holds", async () => {
+    const { toBoolean } = await import("@/utils/conditionals");
+    expect(toBoolean("")).toBe(false);
+    expect(toBoolean("0")).toBe(false);
+    expect(toBoolean(0)).toBe(false);
+    expect(toBoolean(null)).toBe(false);
+    expect(toBoolean("1")).toBe(true);
+    expect(toBoolean(true)).toBe(true);
+  });
+});

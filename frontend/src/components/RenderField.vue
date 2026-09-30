@@ -4,6 +4,7 @@ import { useFieldOptions } from "@/utils/selectOptions";
 import { FormFields, formFields, FormFieldType } from "@/utils/form_fields";
 import type { PropType } from "vue";
 import { computed } from "vue";
+import { isBooleanFieldType, toBoolean } from "@/utils/conditionals";
 
 const props = defineProps({
     field: {
@@ -39,10 +40,29 @@ const getComponent = computed(() => {
         (field: FormFields) => field.name === props.field.fieldtype
     ) as FormFieldType;
 });
+
+/**
+ * A switch or checkbox is only ever handed a real `true` or `false`.
+ *
+ * The form holds `""` for a blank answer and `"0"` for a Check default that
+ * came from a DocType. The switch underneath declares its value as a Boolean,
+ * and Vue casts `""` on a Boolean prop to `true` -- so an untouched switch
+ * believed it was on while being drawn off, and the first click "turned it
+ * off". `"0"` is truthy in JavaScript, so a box whose value meant unticked was
+ * drawn ticked. Either way what the visitor saw was not what was submitted.
+ */
+const isBooleanField = computed(() => isBooleanFieldType(props.field.fieldtype));
+
+const boundValue = computed({
+    get: () => (isBooleanField.value ? toBoolean(value.value) : value.value),
+    set: (next) => {
+        value.value = isBooleanField.value ? toBoolean(next) : next;
+    },
+});
 </script>
 <template>
     <component
-        v-model="value"
+        v-model="boundValue"
         :is="getComponent.component"
         :field="props.field"
         :options="resolvedOptions"
