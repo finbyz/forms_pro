@@ -365,24 +365,11 @@ ${scriptTag}`;
             <div class="flex flex-col gap-2 pt-1">
               <div class="flex items-center justify-between gap-2">
                 <label class="text-sm text-ink-gray-6">Target DocType</label>
-                <div class="flex items-center gap-1.5">
-                  <!--
-                    Whether the form generated this DocType or was pointed at
-                    one the site already had. It decides what the form is
-                    allowed to change, so it belongs next to the name.
-                  -->
-                  <Badge
-                    v-if="form.target_doctype"
-                    variant="subtle"
-                    :theme="form.owns_target_doctype ? 'blue' : 'orange'"
-                    :label="form.owns_target_doctype ? 'Created by this form' : 'Existing DocType'"
-                  />
-                  <Badge
-                    variant="subtle"
-                    :label="form.target_doctype || 'Not set'"
-                    :theme="form.target_doctype ? 'blue' : 'orange'"
-                  />
-                </div>
+                <Badge
+                  variant="subtle"
+                  :label="form.target_doctype || 'Not set'"
+                  :theme="form.target_doctype ? 'blue' : 'orange'"
+                />
               </div>
               <FormControl
                 type="autocomplete"
@@ -397,17 +384,12 @@ ${scriptTag}`;
                 Set this to list that DocType's fields in the builder sidebar.
               </p>
             </div>
-            <div class="flex flex-col gap-2">
-              <label class="text-sm text-ink-gray-6">Strategy</label>
-              <FormControl
-                type="select"
-                variant="subtle"
-                size="sm"
-                :options="recordStrategyOptions"
-                v-model="local.record_strategy"
-                @update:modelValue="updateRecordStrategy"
-              />
-            </div>
+            <!--
+              Strategy is hidden: every submission creates a new record.
+              "Update Existing" needs a rule for finding the record to update,
+              which the builder has no way to set, so it never worked. Restore
+              this block to bring the choice back.
+            -->
             <div class="flex items-start justify-between gap-4 pt-1">
               <div>
                 <label class="text-sm text-ink-gray-8">Create Missing Fields on {{ form.target_doctype || "Target DocType" }}</label>
