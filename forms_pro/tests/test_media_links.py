@@ -48,3 +48,32 @@ class TestAddMediaLinks(FrappeTestCase):
         """An upload that failed leaves an empty node; there is nothing to link to."""
         placeholder = '<video width="640" height="480" controls=""></video>'
         self.assertEqual(add_media_links(placeholder), placeholder)
+
+
+class TestEmbeddedVideoLinks(FrappeTestCase):
+    """
+    An embedded video arrives as an <iframe>, and Frappe's sanitiser deletes
+    iframes when the record is saved -- the answer kept nothing, not even the
+    address. It must leave a link that survives.
+    """
+
+    YOUTUBE = (
+        '<iframe src="https://www.youtube.com/embed/yIW67YKD_Vk?rel=0&amp;modestbranding=1"'
+        ' width="640" height="360"></iframe>'
+    )
+
+    def test_a_youtube_embed_leaves_a_watch_link(self):
+        out = add_media_links(self.YOUTUBE)
+        self.assertIn('href="https://www.youtube.com/watch?v=yIW67YKD_Vk"', out)
+
+    def test_a_vimeo_embed_leaves_a_page_link(self):
+        out = add_media_links('<iframe src="https://player.vimeo.com/video/76979871"></iframe>')
+        self.assertIn('href="https://vimeo.com/76979871"', out)
+
+    def test_the_link_survives_the_sanitiser(self):
+        """The whole point: the iframe goes, the address stays."""
+        from frappe.utils.html_utils import sanitize_html
+
+        stored = sanitize_html(add_media_links(self.YOUTUBE))
+        self.assertNotIn("<iframe", stored)
+        self.assertIn("https://www.youtube.com/watch?v=yIW67YKD_Vk", stored)

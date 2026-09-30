@@ -13,15 +13,27 @@ the same file placed after it. The link is ordinary HTML that every renderer
 keeps, so whoever opens the record can click straight through to the video --
 and the `<video>` element stays where it is, so the form's own success page and
 any other viewer that can play it still do.
+
+An embedded video -- YouTube, Vimeo -- arrives as an `<iframe>`, and that fares
+worse: Frappe's HTML sanitiser removes iframes outright when the record is
+saved, so the answer kept nothing at all, not even the address. It gets the
+same link, pointing at the normal watch page rather than the embed player.
 """
 
 import os
+import re
 import urllib.parse
 
 from bs4 import BeautifulSoup
 
-#: Elements that carry a file the desk will not render.
-MEDIA_TAGS = ("video", "audio", "embed")
+#: Elements that carry media the desk will not render -- or that the sanitiser
+#: removes entirely, as it does every iframe.
+MEDIA_TAGS = ("video", "audio", "embed", "iframe")
+
+_YOUTUBE_EMBED = re.compile(
+    r"^https?://(?:www\.)?(?:youtube\.com|youtube-nocookie\.com)/embed/([A-Za-z0-9_-]{6,})"
+)
+_VIMEO_EMBED = re.compile(r"^https?://player\.vimeo\.com/video/(\d+)")
 
 #: Marks the links this adds, so running twice does not double them up.
 LINK_CLASS = "fp-media-link"
@@ -37,9 +49,26 @@ def _source_url(element) -> str | None:
     return ((source.get("src") or "").strip() or None) if source else None
 
 
+def _watch_url(url: str) -> str:
+    """
+    Where a person should be sent for this media.
+
+    An embed address only plays inside a frame; the watch page is what someone
+    opening the record actually wants.
+    """
+    if match := _YOUTUBE_EMBED.match(url):
+        return f"https://www.youtube.com/watch?v={match.group(1)}"
+    if match := _VIMEO_EMBED.match(url):
+        return f"https://vimeo.com/{match.group(1)}"
+    return url
+
+
 def _label_for(url: str) -> str:
-    """The file's own name, which is more use than the raw path."""
-    name = os.path.basename(urllib.parse.urlparse(url).path)
+    """The file's own name for an upload; the full address for anything else."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return url
+    name = os.path.basename(parsed.path)
     return urllib.parse.unquote(name) or url
 
 
@@ -60,6 +89,7 @@ def add_media_links(html: str | None) -> str | None:
         url = _source_url(element)
         if not url:
             continue
+        url = _watch_url(url)
 
         # Already linked, either by an earlier run or by the author.
         following = element.find_next_sibling()
