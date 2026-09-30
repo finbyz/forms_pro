@@ -115,6 +115,7 @@ def create_child_table(form_id: str, field_label: str | None = None) -> dict:
     doctype.editable_grid = 1
     doctype.append("fields", {"label": "Item", "fieldname": "item", "fieldtype": "Data"})
     doctype.insert(ignore_permissions=True)
+    frappe.cache.hset(_CHILD_TABLE_OWNER, name, form_id)
 
     return {"doctype": name, "columns": get_child_table_columns(name)["columns"]}
 
@@ -198,6 +199,40 @@ def get_child_table_columns(doctype: str) -> dict:
     return {"doctype": doctype, "columns": columns, "editable": is_form_owned(doctype)}
 
 
+#: Which form created each child table, until the form itself records it.
+_CHILD_TABLE_OWNER = "forms_pro_child_table_owner"
+
+
+def _require_write_on_owning_form(doctype: str) -> None:
+    """
+    Only someone who may edit the form using this table may reshape it.
+
+    The module check above proves the table is a form-owned one, not whose. So
+    anyone signed in could replace the columns of another team's table -- and
+    with them the answers every future submission can store.
+    """
+    owners = frappe.get_all(
+        "Form Field",
+        filters={"parenttype": "Form", "fieldtype": "Table", "options": doctype},
+        pluck="parent",
+        distinct=True,
+    )
+    # A table created moments ago is not on its form yet -- the builder writes
+    # the Table field on its next autosave -- so the creator is remembered too.
+    creator = frappe.cache.hget(_CHILD_TABLE_OWNER, doctype)
+    if creator:
+        owners.append(creator)
+    if any(frappe.has_permission("Form", "write", doc=form) for form in owners):
+        return
+    if not owners and "System Manager" in frappe.get_roles():
+        # A table no form points at any more can still be tidied by an admin.
+        return
+    frappe.throw(
+        _("You do not have permission to change the columns of {0}.").format(doctype),
+        frappe.PermissionError,
+    )
+
+
 @frappe.whitelist(methods=["POST"])
 def set_child_table_columns(doctype: str, columns: list[dict]) -> dict:
     """Replace the column list of a form-owned child DocType."""
@@ -214,6 +249,8 @@ def set_child_table_columns(doctype: str, columns: list[dict]) -> dict:
             ).format(doctype),
             frappe.PermissionError,
         )
+
+    _require_write_on_owning_form(doctype)
 
     doc = frappe.get_doc("DocType", doctype)
 

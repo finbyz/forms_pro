@@ -43,12 +43,9 @@ class PublishValidator:
             self.errors.append(_("Target DocType {0} does not exist.").format(dt))
             return
 
-        denylist = [
-            "User", "Role", "System Settings", "DocType", "Custom Field",
-            "Server Script", "OAuth Client", "Installed Applications",
-            "Email Account", "API Key",
-        ]
-        if dt in denylist:
+        from forms_pro.services.publishing.restrictions import RESTRICTED_TARGETS
+
+        if dt in RESTRICTED_TARGETS:
             self.errors.append(_("Target DocType {0} is restricted and cannot be used.").format(dt))
 
         meta = frappe.get_meta(dt)

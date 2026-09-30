@@ -257,6 +257,13 @@ class SubmissionProcessor:
     def _share_documents(self, submission_name: str, target_doc: Any) -> None:
         from frappe.share import add_docshare
 
+        # Every anonymous visitor is the same user, "Guest". Sharing with it
+        # does not give this visitor their response back -- it gives every
+        # anonymous visitor read and write access to it, and to the record it
+        # created. Only a real account gets a share.
+        if frappe.session.user == "Guest":
+            return
+
         add_docshare(
             doctype="FP Form Submission",
             name=submission_name,

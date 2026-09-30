@@ -126,6 +126,11 @@ class FormCompiler:
         }
 
     def publish(self):
+        # Every publish -- the builder's button, the overview toggle -- ends up
+        # here, so the restricted-target rule is enforced once for all of them.
+        from forms_pro.services.publishing.restrictions import assert_target_allowed
+
+        assert_target_allowed(self.form_doc.target_doctype)
         compiled = self.compile()
         
         # Determine next version

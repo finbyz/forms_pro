@@ -54,17 +54,47 @@ def get_form_by_route(route: str) -> dict:
     if not is_published or status == "Archived":
         frappe.throw(_("Form not found"), frappe.DoesNotExistError)
 
-    payload = get_form(form_id)
+    payload = _form_payload(form_id)
 
     active_version = payload.get("active_version")
-    if not active_version:
-        return payload
+    if active_version:
+        published = _published_schema(active_version)
+        if published:
+            payload.update(published)
 
-    published = _published_schema(active_version)
-    if published:
-        payload.update(published)
+    return _public_view(payload)
 
-    return payload
+
+#: What a visitor has no need to see: who built the form and how, and where
+#: the answers go. None of it is used by the public page.
+_PRIVATE_FORM_KEYS = (
+    "owner",
+    "modified_by",
+    "creation",
+    "modified",
+    "linked_team_id",
+    "linked_team_name",
+    "record_strategy",
+    "target_doctype",
+    "target_doctype_module",
+    "owns_target_doctype",
+    "naming_pattern",
+    "create_target_fields",
+)
+
+#: How each field maps onto the target record -- internal plumbing.
+_PRIVATE_FIELD_KEYS = ("target_field", "source_type", "mapping_type")
+
+
+def _public_view(payload: dict) -> dict:
+    """The form as a visitor receives it: content and display settings only."""
+    public = {k: v for k, v in payload.items() if k not in _PRIVATE_FORM_KEYS}
+    public["fields"] = [
+        {k: v for k, v in (f.as_dict() if hasattr(f, "as_dict") else dict(f)).items()
+         if k not in _PRIVATE_FIELD_KEYS}
+        for f in (payload.get("fields") or [])
+    ]
+    return public
 
 
 def _published_schema(version_name: str) -> dict | None:
@@ -106,8 +136,21 @@ def _published_schema(version_name: str) -> dict | None:
     }
 
 
-@frappe.whitelist(allow_guest=True)  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
+@frappe.whitelist()
+@require_permission("Form", "read", param="form_id")
 def get_form(form_id: str) -> dict:
+    """
+    The whole form, for people allowed to read it.
+
+    This used to be open to guests, so anyone could ask for any form by id --
+    including an unpublished draft -- and get every field, mapping, owner, team
+    and setting. Visitors now go through `get_form_by_route`, which serves only
+    what the published form needs.
+    """
+    return _form_payload(form_id)
+
+
+def _form_payload(form_id: str) -> dict:
     form: Form = frappe.get_doc(
         "Form",
         form_id,
@@ -172,7 +215,7 @@ def get_form_for_view(form_id: str) -> dict:
     Requires ``read`` permission on the Form. Returns HTTP 404 when the
     form does not exist and HTTP 403 when the user lacks permission.
     """
-    form_data = get_form(form_id)
+    form_data = _form_payload(form_id)
 
     total_submissions = 0
     submissions_this_week = 0
@@ -236,6 +279,11 @@ def toggle_form_published(form_id: str, is_published: bool | None = None) -> dic
     else:
         form.is_published = 1 if is_published else 0
 
+    if form.is_published:
+        from forms_pro.services.publishing.restrictions import assert_target_allowed
+
+        assert_target_allowed(form.target_doctype)
+
     form.status = "Published" if form.is_published else "Draft"
     form.save(ignore_permissions=True)
 
@@ -256,57 +304,6 @@ def toggle_form_published(form_id: str, is_published: bool | None = None) -> dic
     }
 
 
-@frappe.whitelist()
-@require_permission("Form", "read", param="form_id")
-def get_target_doctype_info(form_id: str, doctype: str | None = None) -> dict:
-    """
-    Whether a form generated its target DocType or was pointed at one.
-
-    The builder loads the Form through Frappe's own document fetch, not
-    through `get_form`, so values added to that payload never reached it --
-    every form was labelled "Existing DocType", including ones whose DocType
-    the form itself had created.
-    """
-    form = frappe.get_doc("Form", form_id)
-    target = doctype or form.target_doctype
-    exists = bool(target and frappe.db.exists("DocType", target))
-    return {
-        "doctype": target,
-        "module": frappe.db.get_value("DocType", target, "module") if exists else None,
-        "owned": owned,
-        # Only an existing DocType's naming is described; a form-owned one is
-        # named by the form's own pattern, which the builder lets you edit.
-        "naming": describe_naming(target) if exists and not owned else None,
-    }
-
-
-@frappe.whitelist()
-@require_permission("Form", "write", param="form_id")
-def get_form_for_edit(form_id: str) -> dict:
-    """Return the form document for the Edit Form page.
-
-    Requires ``write`` permission on the Form. Returns HTTP 404/403 accordingly.
-    """
-    return get_form(form_id)
-
-
-#: Nobody needs more than this to pick a value, and it stops one request
-#: walking a whole table.
-_MAX_LINK_OPTIONS = 100
-
-
-def _public_form_field_options(fieldtypes: tuple[str, ...]) -> set[str]:
-    """The `options` of the given field types across published, guest-facing forms."""
-    rows = frappe.db.sql(
-        """
-        SELECT DISTINCT ff.options
-        FROM `tabForm Field` ff
-        INNER JOIN `tabForm` f ON f.name = ff.parent
-        WHERE ff.parenttype = 'Form'
-          AND ff.fieldtype IN %(fieldtypes)s
-          AND ff.hidden = 0
-          AND f.is_published = 1
-          AND f.login_required = 0
 #: ERPNext DocTypes whose naming is chosen in a settings page, not by the
 #: DocType definition. Supplier's definition says "naming series", but ERPNext
 #: names suppliers by whatever Buying Settings says -- here, the supplier's name
@@ -371,6 +368,62 @@ def describe_naming(doctype: str) -> dict:
     return {"summary": words or "A random ID", "series": [], "configured_in": None}
 
 
+@frappe.whitelist()
+@require_permission("Form", "read", param="form_id")
+def get_target_doctype_info(form_id: str, doctype: str | None = None) -> dict:
+    """
+    Whether a form generated its target DocType or was pointed at one.
+
+    The builder loads the Form through Frappe's own document fetch, not
+    through `get_form`, so values added to that payload never reached it --
+    every form was labelled "Existing DocType", including ones whose DocType
+    the form itself had created.
+    """
+    form = frappe.get_doc("Form", form_id)
+    target = doctype or form.target_doctype
+    exists = bool(target and frappe.db.exists("DocType", target))
+    owned = (
+        bool(form.owns_target_doctype())
+        if exists and target == form.target_doctype
+        else bool(exists and frappe.db.get_value("DocType", target, "module") == "User Forms")
+    )
+    return {
+        "doctype": target,
+        "module": frappe.db.get_value("DocType", target, "module") if exists else None,
+        "owned": owned,
+        # Only an existing DocType's naming is described; a form-owned one is
+        # named by the form's own pattern, which the builder lets you edit.
+        "naming": describe_naming(target) if exists and not owned else None,
+    }
+
+
+@frappe.whitelist()
+@require_permission("Form", "write", param="form_id")
+def get_form_for_edit(form_id: str) -> dict:
+    """Return the form document for the Edit Form page.
+
+    Requires ``write`` permission on the Form. Returns HTTP 404/403 accordingly.
+    """
+    return _form_payload(form_id)
+
+
+#: Nobody needs more than this to pick a value, and it stops one request
+#: walking a whole table.
+_MAX_LINK_OPTIONS = 100
+
+
+def _public_form_field_options(fieldtypes: tuple[str, ...]) -> set[str]:
+    """The `options` of the given field types across published, guest-facing forms."""
+    rows = frappe.db.sql(
+        """
+        SELECT DISTINCT ff.options
+        FROM `tabForm Field` ff
+        INNER JOIN `tabForm` f ON f.name = ff.parent
+        WHERE ff.parenttype = 'Form'
+          AND ff.fieldtype IN %(fieldtypes)s
+          AND ff.hidden = 0
+          AND f.is_published = 1
+          AND f.login_required = 0
         """,
         {"fieldtypes": fieldtypes},
     )
@@ -385,11 +438,6 @@ def guest_visible_child_tables() -> set[str]:
 def _guest_readable_link_targets() -> set[str]:
     """
     Every DocType a visitor is genuinely being asked to choose from.
-    owned = (
-        bool(form.owns_target_doctype())
-        if exists and target == form.target_doctype
-        else bool(exists and frappe.db.get_value("DocType", target, "module") == "User Forms")
-    )
 
     A public form with a "Company" Link field has to show company names -- that
     is the field doing its job. So does a Company column *inside* a table on

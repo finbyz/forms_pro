@@ -383,6 +383,16 @@ def submit_form_response(
                 frappe.PermissionError,
             )
 
+        from forms_pro.services.publishing.restrictions import assert_target_allowed
+
+        assert_target_allowed(form.target_doctype)
+
+        if form.status == "Archived":
+            frappe.throw(
+                _("This form has been archived and is no longer accepting responses."),
+                frappe.PermissionError,
+            )
+
         # Guard before any work happens, so a rejected request never creates a
         # submission row or touches the target DocType. A saved draft is the
         # user's own in-progress work, so only real submissions are checked.
