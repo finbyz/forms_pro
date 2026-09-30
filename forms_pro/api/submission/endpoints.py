@@ -339,6 +339,15 @@ def _validate_form_response(form: "Form", form_data: dict) -> None:
         frappe.throw("\n".join(errors), frappe.ValidationError)
 
 
+def _allows_partial_submissions(form) -> bool:
+    """The setting as visitors are held to it: from the published version."""
+    if form.active_version:
+        schema_json = frappe.db.get_value("FP Form Version", form.active_version, "schema_json")
+        if schema_json:
+            return bool(frappe.parse_json(schema_json).get("allow_incomplete"))
+    return bool(form.allow_incomplete)
+
+
 @frappe.whitelist(allow_guest=True, methods=["POST"])  # nosemgrep: frappe-semgrep-rules.rules.security.guest-whitelisted-method
 def submit_form_response(
     form_id: str,
@@ -377,6 +386,16 @@ def submit_form_response(
         # Guard before any work happens, so a rejected request never creates a
         # submission row or touches the target DocType. A saved draft is the
         # user's own in-progress work, so only real submissions are checked.
+        # A draft is only allowed where the form allows partial submissions.
+        # The builder hides the "Save draft" button otherwise, but the server
+        # took a draft from anyone who sent one. What visitors are held to is
+        # the published version, so that is where the setting is read from.
+        if status == SubmissionStatus.DRAFT and not _allows_partial_submissions(form):
+            frappe.throw(
+                _("This form does not accept partial submissions."),
+                frappe.PermissionError,
+            )
+
         check_rate_limit(form.route or form_id)
         if status == SubmissionStatus.SUBMITTED:
             verify_captcha(captcha_token, action="submit")

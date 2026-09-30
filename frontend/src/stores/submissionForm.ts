@@ -30,6 +30,11 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     () => formResource.value?.data?.allow_incomplete
   );
 
+  /** Whether a visitor's answers are kept between visits. */
+  function keepsProgress(): boolean {
+    return Boolean(formResource.value?.data?.allow_incomplete);
+  }
+
   const currentFormId = computed((): string | null => {
     if (!formResource.value || !formResource.value.data) {
       return null;
@@ -173,8 +178,14 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
         // Initialize fields with defaults first
         initializeFields();
 
-        // Restore draft data & step progress from localStorage
-        try {
+        // Restore draft data & step progress from localStorage -- but only
+        // when the form allows partial submissions. That setting is the
+        // author's answer to "may a visitor leave and come back to this?";
+        // with it off, every visit is a fresh form. The draft used to be kept
+        // regardless, so unticking it changed nothing a visitor could see.
+        if (!keepsProgress()) {
+          clearDraft();
+        } else try {
           const rawDraft = localStorage.getItem(draftKey(data.name));
           if (rawDraft) {
             const parsed = JSON.parse(rawDraft);
@@ -423,6 +434,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
     fields,
     (newFields) => {
       const formName = formResource.value?.data?.name;
+      if (!keepsProgress()) return;
       if (formName && newFields && Object.keys(newFields).length > 0) {
         try {
           localStorage.setItem(
@@ -440,7 +452,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
   // Watch currentStepIndex and persist current step to localStorage
   watch(currentStepIndex, (newStep) => {
     const formName = formResource.value?.data?.name;
-    if (formName) {
+    if (formName && keepsProgress()) {
       try {
         localStorage.setItem(stepKey(formName), String(newStep));
       } catch (e) {}

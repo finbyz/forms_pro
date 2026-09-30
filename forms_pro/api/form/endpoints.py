@@ -231,6 +231,18 @@ def toggle_form_published(form_id: str, is_published: bool | None = None) -> dic
 
     form.status = "Published" if form.is_published else "Draft"
     form.save(ignore_permissions=True)
+
+    # Publishing from the overview used to flip the flag and nothing else. A
+    # form that had never been published through the builder then had no
+    # version at all, so visitors were served the live draft, and the builder
+    # reported "Publish changes" for a form that was already up. Republishing
+    # an existing version keeps it, the same as the builder's own unpublish
+    # and publish do.
+    if form.is_published and not form.active_version:
+        from forms_pro.services.publishing.compiler import FormCompiler
+
+        FormCompiler(form.name).publish()
+
     return {
         "is_published": form.is_published,
         "status": form.status,
