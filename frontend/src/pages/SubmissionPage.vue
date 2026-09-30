@@ -40,15 +40,26 @@ function postToHost(event: string, data: Record<string, unknown> = {}) {
     window.parent.postMessage({ source: "forms-pro", event, ...data }, "*");
 }
 
+/**
+ * Inside an iframe the page must be exactly as tall as its content.
+ *
+ * `min-h-svh` makes the page at least as tall as the viewport, and inside an
+ * iframe the viewport *is* the frame. So once the host sized the frame to the
+ * form, the page could never report anything smaller: the frame only ever grew,
+ * and a short step after a long one sat above a band of empty space.
+ */
+const isEmbedded = window !== window.parent;
+
 // Embed integration: Resize observer
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
-    if (window !== window.parent) {
-        resizeObserver = new ResizeObserver((entries) => {
-            const height = entries[0].target.scrollHeight;
+    if (isEmbedded) {
+        // Measure the page itself, not the body: the body stretches to the frame.
+        resizeObserver = new ResizeObserver(() => {
+            const height = themeRoot.value?.scrollHeight ?? document.body.scrollHeight;
             postToHost("formspro:resize", { height });
         });
-        resizeObserver.observe(document.body);
+        resizeObserver.observe(themeRoot.value ?? document.body);
     }
 });
 
@@ -71,7 +82,11 @@ watch(() => submissionFormStore.inSuccessState, (isSuccess) => {
 
 </script>
 <template>
-    <div ref="themeRoot" class="p-8 bg-surface-gray-1 min-h-svh space-y-16">
+    <div
+        ref="themeRoot"
+        class="p-8 bg-surface-gray-1 space-y-16"
+        :class="{ 'min-h-svh': !isEmbedded }"
+    >
         <PageHeader />
 
         <!-- No such form: checked first, or a failed lookup reads as "still loading" -->
