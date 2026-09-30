@@ -253,6 +253,16 @@ export const useEditForm = defineStore("editForm", () => {
   }
 
   function initialize(formId: string) {
+    // Coming back to a form already opened in this session. The store keeps
+    // the copy it loaded last time, and this used to return without looking at
+    // the server again -- so unpublishing from the form's overview page and
+    // then opening the builder still showed "Published", and the other way
+    // round. Anything still waiting to autosave is written first, so the
+    // reload cannot throw an edit away.
+    if (formId === currentFormId.value && formResource.value) {
+      void refreshFromServer();
+      return;
+    }
     if (formId !== currentFormId.value) {
       currentFormId.value = formId;
       // Suppressed until the document has hydrated; see onSuccess below.
@@ -286,8 +296,25 @@ export const useEditForm = defineStore("editForm", () => {
 
   function reload() {
     if (formResource.value) {
+      // The reloaded document replaces the old one wholesale, which the field
+      // and title watchers would otherwise read as an edit and autosave. The
+      // resource's onSuccess re-arms them once it has hydrated.
+      skipSnapshot = true;
       formResource.value.reload();
     }
+  }
+
+  async function refreshFromServer() {
+    cancelAutosave();
+    if (isUnsaved.value) {
+      try {
+        await save(undefined, true);
+      } catch {
+        // save() has already reported it; reloading now would drop the edit.
+        return;
+      }
+    }
+    reload();
   }
 
   function reset() {
@@ -471,20 +498,37 @@ export const useEditForm = defineStore("editForm", () => {
     () => publishState.value?.never_published ?? true
   );
 
+  /**
+   * Only the newest answer about publish state may be shown.
+   *
+   * Saving asks the server for the publish state without waiting, and the
+   * publish button saves first when there is anything unsaved -- so the
+   * question "are there unpublished changes?" went out *before* the publish,
+   * and its answer ("yes") could arrive *after* the publish had answered
+   * "no". The stale answer won, "Publish changes" came straight back, and a
+   * second click published the same thing again. Ticking "Allow Partial
+   * Submissions" and pressing Publish straight away hit it every time.
+   */
+  let publishStateSeq = 0;
+
   async function refreshPublishState() {
     if (!currentFormId.value) return;
+    const seq = ++publishStateSeq;
     const res = createResource({
       url: "forms_pro.api.v1.builder.publishing.get_publish_state",
       params: { form_id: currentFormId.value },
     });
     await res.fetch();
+    if (seq !== publishStateSeq) return;
     publishState.value = res.data ?? null;
   }
 
   /** Compile the draft into a new version and serve it to visitors. */
   async function publish() {
     if (!currentFormId.value) return;
-    // Publish what is on screen, not what was last autosaved.
+    // Publish what is on screen, not what was last autosaved -- and do not
+    // let a pending autosave run a second save in the middle of it.
+    cancelAutosave();
     if (isUnsaved.value) await save(undefined, true);
 
     const res = createResource({
@@ -494,6 +538,7 @@ export const useEditForm = defineStore("editForm", () => {
     });
     try {
       await res.fetch();
+      publishStateSeq++; // anything asked before the publish is now stale
       publishState.value = res.data ?? null;
       if (formResource.value?.doc) formResource.value.doc.is_published = 1;
       toast.success(
@@ -516,6 +561,7 @@ export const useEditForm = defineStore("editForm", () => {
     });
     try {
       await res.fetch();
+      publishStateSeq++;
       publishState.value = res.data ?? null;
       if (formResource.value?.doc) formResource.value.doc.is_published = 0;
       toast.info("Form unpublished — it is no longer accepting responses");
