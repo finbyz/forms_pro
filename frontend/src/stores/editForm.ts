@@ -235,15 +235,21 @@ export const useEditForm = defineStore("editForm", () => {
   });
 
   /** Which DocType the form writes to, and whether the form created it. */
-  const targetInfo = ref<{ doctype: string | null; module: string | null; owned: boolean } | null>(
-    null
-  );
+  const targetInfo = ref<{
+    doctype: string | null;
+    module: string | null;
+    owned: boolean;
+    naming: { summary: string; series: string[]; configured_in: string | null } | null;
+  } | null>(null);
 
-  async function loadTargetInfo() {
+  async function loadTargetInfo(doctype?: string) {
     if (!currentFormId.value) return;
     const res = createResource({
       url: "forms_pro.api.form.get_target_doctype_info",
-      params: { form_id: currentFormId.value },
+      params: {
+        form_id: currentFormId.value,
+        ...(doctype ? { doctype } : {}),
+      },
     });
     try {
       await res.fetch();
@@ -254,7 +260,7 @@ export const useEditForm = defineStore("editForm", () => {
   }
 
   async function getDoctypeFields() {
-    loadTargetInfo();
+    await loadTargetInfo();
     if (formResource.value?.doc?.target_doctype) {
       const _fields = createResource({
         url: "forms_pro.api.form.get_doctype_fields",
@@ -1028,5 +1034,6 @@ export const useEditForm = defineStore("editForm", () => {
     isFormField,
     seedMandatoryFields,
     setTargetDoctype,
+    loadTargetInfo,
   };
 });

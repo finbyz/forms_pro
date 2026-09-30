@@ -258,7 +258,7 @@ def toggle_form_published(form_id: str, is_published: bool | None = None) -> dic
 
 @frappe.whitelist()
 @require_permission("Form", "read", param="form_id")
-def get_target_doctype_info(form_id: str) -> dict:
+def get_target_doctype_info(form_id: str, doctype: str | None = None) -> dict:
     """
     Whether a form generated its target DocType or was pointed at one.
 
@@ -268,12 +268,15 @@ def get_target_doctype_info(form_id: str) -> dict:
     the form itself had created.
     """
     form = frappe.get_doc("Form", form_id)
-    target = form.target_doctype
+    target = doctype or form.target_doctype
     exists = bool(target and frappe.db.exists("DocType", target))
     return {
         "doctype": target,
         "module": frappe.db.get_value("DocType", target, "module") if exists else None,
-        "owned": bool(form.owns_target_doctype()) if exists else False,
+        "owned": owned,
+        # Only an existing DocType's naming is described; a form-owned one is
+        # named by the form's own pattern, which the builder lets you edit.
+        "naming": describe_naming(target) if exists and not owned else None,
     }
 
 
@@ -304,6 +307,70 @@ def _public_form_field_options(fieldtypes: tuple[str, ...]) -> set[str]:
           AND ff.hidden = 0
           AND f.is_published = 1
           AND f.login_required = 0
+#: ERPNext DocTypes whose naming is chosen in a settings page, not by the
+#: DocType definition. Supplier's definition says "naming series", but ERPNext
+#: names suppliers by whatever Buying Settings says -- here, the supplier's name
+#: -- so reading only the definition would describe a rule that is never used.
+_NAMING_SETTINGS = {
+    "Supplier": ("Buying Settings", "supp_master_name", "Buying Settings → Supplier Naming By"),
+    "Customer": ("Selling Settings", "cust_master_name", "Selling Settings → Customer Naming By"),
+    "Item": ("Stock Settings", "item_naming_by", "Stock Settings → Item Naming By"),
+}
+
+#: Frappe's own naming rules, in words an author can act on.
+_NAMING_RULE_WORDS = {
+    "hash": "A random ID",
+    "Random": "A random ID",
+    "autoincrement": "An increasing number",
+    "Autoincrement": "An increasing number",
+    "Prompt": "Typed in by whoever creates the record",
+    "By script": "Decided by the DocType's own code",
+}
+
+
+def describe_naming(doctype: str) -> dict:
+    """
+    How records of an existing DocType are named, as ERPNext actually does it.
+
+    A form never changes this -- the naming belongs to the DocType and every
+    other way of creating its records -- so the builder shows it instead of
+    offering a pattern that would be ignored.
+    """
+    meta = frappe.get_meta(doctype)
+    series_field = meta.get_field("naming_series")
+    series = [s for s in (series_field.options or "").split("\n") if s.strip()] if series_field else []
+    configured_in = None
+    rule = meta.autoname or ""
+
+    if doctype in _NAMING_SETTINGS:
+        settings, fieldname, configured_in = _NAMING_SETTINGS[doctype]
+        chosen = frappe.db.get_single_value(settings, fieldname)
+        if chosen and chosen != "Naming Series":
+            return {
+                "summary": f"By {chosen}",
+                "series": [],
+                "configured_in": configured_in,
+            }
+        return {"summary": "By naming series", "series": series, "configured_in": configured_in}
+
+    if rule.startswith("naming_series:"):
+        return {"summary": "By naming series", "series": series, "configured_in": None}
+    if rule.startswith("field:"):
+        field = meta.get_field(rule.split(":", 1)[1])
+        return {
+            "summary": f"By the value of {field.label if field else rule.split(':', 1)[1]}",
+            "series": [],
+            "configured_in": None,
+        }
+    if rule.startswith("format:"):
+        return {"summary": "By pattern", "series": [rule.split(":", 1)[1]], "configured_in": None}
+    if rule and "." in rule and "#" in rule:
+        return {"summary": "By pattern", "series": [rule], "configured_in": None}
+
+    words = _NAMING_RULE_WORDS.get(rule) or _NAMING_RULE_WORDS.get(meta.naming_rule or "")
+    return {"summary": words or "A random ID", "series": [], "configured_in": None}
+
+
         """,
         {"fieldtypes": fieldtypes},
     )
@@ -318,6 +385,11 @@ def guest_visible_child_tables() -> set[str]:
 def _guest_readable_link_targets() -> set[str]:
     """
     Every DocType a visitor is genuinely being asked to choose from.
+    owned = (
+        bool(form.owns_target_doctype())
+        if exists and target == form.target_doctype
+        else bool(exists and frappe.db.get_value("DocType", target, "module") == "User Forms")
+    )
 
     A public form with a "Company" Link field has to show company names -- that
     is the field doing its job. So does a Company column *inside* a table on

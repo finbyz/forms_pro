@@ -265,6 +265,12 @@ class Form(Document):
         if not pattern:
             return
 
+        # Only a DocType the form created is named by the form's pattern. On an
+        # existing one the pattern is never applied, so a stale one must not be
+        # able to fail an unrelated save.
+        if self.target_doctype and not self.owns_target_doctype():
+            return
+
         if "." in pattern:
             frappe.throw(
                 _(

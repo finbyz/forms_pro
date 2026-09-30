@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, defineAsyncComponent } from "vue";
+import { ref, watch, computed, defineAsyncComponent, onMounted } from "vue";
 import { Button, FormControl, Badge, createResource } from "frappe-ui";
 
 // Same reason as everywhere else: keep ProseMirror out of the eager graph.
@@ -196,6 +196,23 @@ function updateSuccessMode(val: any) {
   saveSetting("success_mode", mode);
 }
 
+/**
+ * Only DocTypes in the "User Forms" module are created and owned by Forms Pro,
+ * so their naming pattern is configured here. Existing DocTypes (Referral, Customer,
+ * Lead, etc.) manage their own naming series in the backend and must not be configured here.
+ */
+const isUserFormsModule = computed(() => {
+  const mod = editFormStore.targetInfo?.module;
+  if (!mod) return false;
+  return mod.trim().toLowerCase().replace(/[\s_-]+/g, "") === "userforms";
+});
+
+onMounted(() => {
+  if (!editFormStore.targetInfo && editFormStore.currentFormId) {
+    editFormStore.loadTargetInfo?.();
+  }
+});
+
 const redirectUrlError = ref("");
 
 /**
@@ -249,24 +266,6 @@ async function updateRoute() {
   } finally {
     savingRoute.value = false;
   }
-}
-
-function copyLink() {
-  const link = `${window.location.origin}/forms/p/${local.value.route}`;
-  navigator.clipboard.writeText(link);
-  (window as any).frappe?.show_alert?.({ message: "Link copied!", indicator: "green" });
-}
-
-function copyEmbed() {
-    const link = `${window.location.origin}/forms/p/${local.value.route}`;
-    // Avoid Vue compiler parsing script tags in template literal
-    // Not `async`: the loader identifies itself from the running tag, and an
-    // async tag can execute out of order. Same snippet as the Share panel.
-    const scriptTag = "<" + "script src=\"" + window.location.origin + "/api/method/forms_pro.api.v1.public.get_embed_script\" data-route=\"" + local.value.route + "\" data-base=\"" + window.location.origin + "\"><" + "/script>";
-    const code = `<div data-forms-pro="${local.value.route}"></div>
-${scriptTag}`;
-    navigator.clipboard.writeText(code);
-    (window as any).frappe?.show_alert?.({ message: "Embed code copied!", indicator: "green" });
 }
 </script>
 
@@ -406,7 +405,11 @@ ${scriptTag}`;
                 @change="saveSetting('create_target_fields', local.create_target_fields ? 1 : 0)"
               />
             </div>
-            <div class="flex flex-col gap-2">
+            <!--
+              Only show Record Name Pattern if the target DocType belongs to the "User Forms" module.
+              Existing DocTypes (Referral, Customer, Lead, etc.) already have their naming series set on the backend.
+            -->
+            <div v-if="isUserFormsModule" class="flex flex-col gap-2">
               <label class="text-sm text-ink-gray-6">Record Name Pattern</label>
               <FormControl
                 type="text"
@@ -504,36 +507,6 @@ ${scriptTag}`;
           </div>
         </section>
 
-        <!-- Embed -->
-        <section class="bg-surface-base rounded-6 border border-outline-gray-1 p-5">
-          <div class="flex items-center gap-2 mb-5">
-            <lucide-globe class="w-4 h-4 text-ink-gray-6" aria-hidden="true" />
-            <h3 class="text-base-semibold text-ink-gray-8">Embed</h3>
-          </div>
-          <div class="space-y-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <Button 
-                icon-left="copy" 
-                variant="subtle" 
-                theme="gray" 
-                size="sm" 
-                @click="copyLink"
-              >
-                Copy Link
-              </Button>
-              <Button 
-                icon-left="code" 
-                variant="subtle" 
-                theme="gray" 
-                size="sm" 
-                @click="copyEmbed"
-              >
-                Copy Embed Code
-              </Button>
-            </div>
-            <p class="text-xs text-ink-gray-5">Share this form on any website via embed code or direct link</p>
-          </div>
-        </section>
       </div>
     </div>
   </div>

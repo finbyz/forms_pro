@@ -38,3 +38,26 @@ class TestToNamingSeries(FrappeTestCase):
         year = frappe.utils.now_datetime().strftime("%Y")
         self.assertEqual(seen["key"], f"CR-{year}-")
         self.assertEqual(name, f"CR-{year}-000001")
+
+
+class TestExistingDocTypeNaming(FrappeTestCase):
+    """An existing DocType keeps ERPNext's naming, described as ERPNext applies it."""
+
+    def test_supplier_follows_buying_settings_not_its_definition(self):
+        from forms_pro.api.form.endpoints import describe_naming
+
+        chosen = frappe.db.get_single_value("Buying Settings", "supp_master_name")
+        naming = describe_naming("Supplier")
+        if chosen and chosen != "Naming Series":
+            self.assertEqual(naming["summary"], f"By {chosen}")
+            self.assertEqual(naming["series"], [])
+        else:
+            self.assertEqual(naming["summary"], "By naming series")
+        self.assertIn("Buying Settings", naming["configured_in"])
+
+    def test_a_naming_series_doctype_lists_its_series(self):
+        from forms_pro.api.form.endpoints import describe_naming
+
+        naming = describe_naming("Lead")
+        self.assertEqual(naming["summary"], "By naming series")
+        self.assertTrue(naming["series"])
