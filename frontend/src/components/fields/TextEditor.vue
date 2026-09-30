@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { sameHtml } from "@/utils/html_equivalence";
+import { uploadEndpointFor } from "@/utils/uploadClaim";
 import { TextEditor as FrappeTextEditor } from "frappe-ui";
 
 const props = withDefaults(
@@ -118,6 +119,13 @@ const resolvedEditorClass = computed(() => {
     return "bg-surface-white w-full rounded-b form-description border border-outline-gray-modals min-h-[6rem] p-3 focus:outline-none";
 });
 
+// On the public form an image or video dropped into the answer carries the
+// form's upload claim, which the server requires of an anonymous upload.
+const resolvedUploadArgs = computed(() => {
+    const endpoint = uploadEndpointFor(props.field?.fieldname);
+    return endpoint ? { ...props.uploadArgs, upload_endpoint: endpoint } : props.uploadArgs;
+});
+
 function onChange(val: string) {
     lastEmitted.value = val;
     // frappe-ui raises `change` and `update:modelValue` together for a single
@@ -139,7 +147,7 @@ function onChange(val: string) {
             :bubble-menu="resolvedBubbleMenu"
             :floating-menu="resolvedFloatingMenu"
             :starterkit-options="resolvedStarterKit"
-            :upload-args="uploadArgs"
+            :upload-args="resolvedUploadArgs"
             @change="onChange"
         />
     </div>

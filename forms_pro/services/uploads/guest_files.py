@@ -71,6 +71,13 @@ class FormsProFile(File):
     """
 
     def before_insert(self):
+        # An anonymous upload must be on behalf of a form it could fill in
+        # (FP-SEC-08); see services/security/upload_claims.py.
+        if is_form_upload(self) and frappe.session.user == "Guest":
+            from forms_pro.services.security.upload_claims import assert_guest_upload_allowed
+
+            assert_guest_upload_allowed()
+
         if is_form_upload(self) and self.file_name and not self.file_url:
             self.file_name = public_upload_name(self.file_name)
             # Private would be safer, but Frappe will not serve a private file

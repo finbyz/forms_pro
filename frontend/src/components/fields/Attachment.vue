@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ErrorMessage, FileUploader } from "frappe-ui";
 import { computed, ref } from "vue";
+import { uploadEndpointFor } from "@/utils/uploadClaim";
 
-defineProps({
+const props = defineProps({
     field: {
         type: Object,
         required: true,
@@ -80,7 +81,9 @@ const displaySize = computed(() => fileData.value?.file_size ?? null);
 // Guests can only upload when System Settings allows it, and the allowlist
 // there is keyed on this doctype — so tag the upload rather than leaving guest
 // uploads open site-wide.
-const uploadArgs = {
+const uploadArgs = computed(() => ({
+    // The form's upload claim, which an anonymous upload must carry.
+    upload_endpoint: uploadEndpointFor(props.field?.fieldname),
     doctype: "FP Form Submission",
     // Public, because Frappe refuses a private file to a guest outright -- the
     // visitor could not see back the file they had just attached. The server
@@ -88,7 +91,7 @@ const uploadArgs = {
     // forms_pro/services/uploads/guest_files.py.
     private: false,
     folder: "Home/Attachments",
-};
+}));
 
 const handleRemove = () => {
     fileData.value = null;

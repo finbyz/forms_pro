@@ -384,8 +384,11 @@ def submit_form_response(
             )
 
         from forms_pro.services.publishing.restrictions import assert_target_allowed
+        from forms_pro.services.security.access import assert_can_access
 
         assert_target_allowed(form.target_doctype)
+        # Drafts included: saving progress is still writing to the form.
+        assert_can_access(form)
 
         if form.status == "Archived":
             frappe.throw(

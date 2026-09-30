@@ -54,6 +54,13 @@ def get_form_by_route(route: str) -> dict:
     if not is_published or status == "Archived":
         frappe.throw(_("Form not found"), frappe.DoesNotExistError)
 
+    # Access Mode, enforced here and not only by the browser's router (FP-SEC-07).
+    from forms_pro.services.security.access import assert_can_access
+
+    assert_can_access(
+        frappe.db.get_value("Form", form_id, ["access_mode", "login_required"], as_dict=True)
+    )
+
     payload = _form_payload(form_id)
 
     active_version = payload.get("active_version")
@@ -62,7 +69,14 @@ def get_form_by_route(route: str) -> dict:
         if published:
             payload.update(published)
 
-    return _public_view(payload)
+    public = _public_view(payload)
+    # Lets this visitor attach files to this form -- and only this form
+    # (FP-SEC-08). Handed out here because loading the form is what the
+    # Access Mode check above already allowed.
+    from forms_pro.services.security.upload_claims import issue
+
+    public["upload_token"] = issue(form_id)
+    return public
 
 
 #: What a visitor has no need to see: who built the form and how, and where
