@@ -4,7 +4,7 @@ import { Button, Badge, createResource, FeatherIcon, Tooltip } from "frappe-ui";
 import { useEditForm } from "@/stores/editForm";
 
 const editFormStore = useEditForm();
-const summary = ref<any>({ total: 0, success: 0, failed: 0, created: 0, updated: 0, conversion_rate: 0 });
+const summary = ref<any>({ total: 0, success: 0, failed: 0, drafts: 0, created: 0, updated: 0, conversion_rate: 0 });
 const sources = ref<any>({ utm_sources: [], referrers: [] });
 const timeseries = ref<any>({ dates: [], counts: [] });
 const loading = ref(false);
@@ -66,7 +66,7 @@ async function fetchAnalytics() {
         },
       }).submit(),
     ]);
-    summary.value = sum ?? { total: 0, success: 0, failed: 0, created: 0, updated: 0, conversion_rate: 0 };
+    summary.value = sum ?? { total: 0, success: 0, failed: 0, drafts: 0, created: 0, updated: 0, conversion_rate: 0 };
     sources.value = src ?? { utm_sources: [], referrers: [] };
     timeseries.value = ts ?? { dates: [], counts: [] };
   } finally {
@@ -124,6 +124,16 @@ const kpis = computed(() => {
       iconBg: sum.failed > 0 ? "bg-surface-red-2 text-ink-red-7" : "bg-surface-gray-2 text-ink-gray-5",
       context: sum.failed > 0 ? "Requires review" : "No submission errors",
       badge: sum.failed > 0 ? { theme: "red", label: "Issues" } : null,
+    },
+    {
+      // Saved with "Save draft" and not submitted yet. Without this card the
+      // total never added up: every draft was in "Total" and nowhere else.
+      label: "Drafts",
+      value: sum.drafts ?? 0,
+      icon: "file-text",
+      iconBg: "bg-surface-amber-2 text-ink-amber-7",
+      context: sum.drafts > 0 ? "Saved but not submitted yet" : "No unfinished submissions",
+      badge: null,
     },
     {
       label: "Records Created",
@@ -297,7 +307,7 @@ const totalReferrerCount = computed(() => {
     <!-- Main Content Area -->
     <div class="flex-1 overflow-y-auto p-6 space-y-6">
       <!-- KPI Cards Grid (3 cols on desktop, 2 on tablet, 1 on mobile) -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           v-for="kpi in kpis"
           :key="kpi.label"
