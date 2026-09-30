@@ -37,8 +37,8 @@ watch(filteredFields, (v) => (draggableFields.value = [...v]), { immediate: true
 const hasDoctype = computed(() => !!editFormStore.formData?.target_doctype);
 
 /** True when this form generated its target DocType, rather than being pointed at one. */
-const ownsDoctype = computed(() => Boolean(editFormStore.formData?.owns_target_doctype));
-const targetModule = computed(() => editFormStore.formData?.target_doctype_module ?? "");
+const ownsDoctype = computed(() => Boolean(editFormStore.targetInfo?.owned));
+const targetModule = computed(() => editFormStore.targetInfo?.module ?? "");
 
 // Mandatory DocType fields the form does not map yet.
 const missingRequired = computed(() => {

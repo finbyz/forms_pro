@@ -257,6 +257,27 @@ def toggle_form_published(form_id: str, is_published: bool | None = None) -> dic
 
 
 @frappe.whitelist()
+@require_permission("Form", "read", param="form_id")
+def get_target_doctype_info(form_id: str) -> dict:
+    """
+    Whether a form generated its target DocType or was pointed at one.
+
+    The builder loads the Form through Frappe's own document fetch, not
+    through `get_form`, so values added to that payload never reached it --
+    every form was labelled "Existing DocType", including ones whose DocType
+    the form itself had created.
+    """
+    form = frappe.get_doc("Form", form_id)
+    target = form.target_doctype
+    exists = bool(target and frappe.db.exists("DocType", target))
+    return {
+        "doctype": target,
+        "module": frappe.db.get_value("DocType", target, "module") if exists else None,
+        "owned": bool(form.owns_target_doctype()) if exists else False,
+    }
+
+
+@frappe.whitelist()
 @require_permission("Form", "write", param="form_id")
 def get_form_for_edit(form_id: str) -> dict:
     """Return the form document for the Edit Form page.

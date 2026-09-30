@@ -227,7 +227,27 @@ export const useEditForm = defineStore("editForm", () => {
     disableDirtyGuard();
   });
 
+  /** Which DocType the form writes to, and whether the form created it. */
+  const targetInfo = ref<{ doctype: string | null; module: string | null; owned: boolean } | null>(
+    null
+  );
+
+  async function loadTargetInfo() {
+    if (!currentFormId.value) return;
+    const res = createResource({
+      url: "forms_pro.api.form.get_target_doctype_info",
+      params: { form_id: currentFormId.value },
+    });
+    try {
+      await res.fetch();
+      targetInfo.value = res.data ?? null;
+    } catch {
+      targetInfo.value = null;
+    }
+  }
+
   async function getDoctypeFields() {
+    loadTargetInfo();
     if (formResource.value?.doc?.target_doctype) {
       const _fields = createResource({
         url: "forms_pro.api.form.get_doctype_fields",
@@ -949,6 +969,7 @@ export const useEditForm = defineStore("editForm", () => {
     selectedField,
     isPublished,
     doctypeFields,
+    targetInfo,
     publishState,
     hasUnpublishedChanges,
     neverPublished,
