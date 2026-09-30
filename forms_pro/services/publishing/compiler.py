@@ -102,6 +102,12 @@ class FormCompiler:
             "success_description": self.form_doc.success_description,
             "allow_incomplete": self.form_doc.allow_incomplete,
             "login_required": self.form_doc.login_required,
+            # What happens after a visitor submits. Snapshotted so changing it
+            # in the builder is a change to publish, like everything else a
+            # visitor sees -- it was read live from the draft before, and the
+            # redirect URL was never read at all.
+            "success_mode": self.form_doc.success_mode,
+            "success_redirect_url": self.form_doc.get("success_redirect_url"),
             "fields": fields,
         }
 

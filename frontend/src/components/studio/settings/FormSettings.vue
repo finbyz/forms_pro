@@ -196,8 +196,35 @@ function updateSuccessMode(val: any) {
   saveSetting("success_mode", mode);
 }
 
-function updateSuccessRedirectUrl(val: any) {
-  const url = typeof val === "string" ? val : val?.target?.value || "";
+const redirectUrlError = ref("");
+
+/**
+ * Save the redirect URL once the author has finished typing it.
+ *
+ * It used to be written to the form on every keystroke. The column is a Frappe
+ * URL field, which refuses anything without http(s):// -- so `www.finbyz.tech`,
+ * or any URL half-typed when the autosave fired, failed the whole save. The
+ * save carries the entire form, so the Success Mode change was thrown away with
+ * it, and no redirect was ever stored. A missing scheme is now filled in, and
+ * an unusable URL is reported here instead of being sent.
+ */
+function saveSuccessRedirectUrl() {
+  let url = (local.value.success_redirect_url || "").trim();
+  if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+
+  if (url) {
+    try {
+      const parsed = new URL(url.replace(/\{\{\s*submission_id\s*\}\}/g, "id"));
+      if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname.includes(".")) {
+        throw new Error("not a web address");
+      }
+    } catch {
+      redirectUrlError.value = "Enter a full web address, like https://example.com/thank-you";
+      return;
+    }
+  }
+
+  redirectUrlError.value = "";
   local.value.success_redirect_url = url;
   saveSetting("success_redirect_url", url);
 }
@@ -485,8 +512,11 @@ ${scriptTag}`;
               size="sm"
               v-model="local.success_redirect_url"
               placeholder="https://example.com/thank-you"
-              @update:modelValue="updateSuccessRedirectUrl"
+              @update:modelValue="markEditing('success_redirect_url')"
+              @blur="saveSuccessRedirectUrl"
+              @keydown.enter="saveSuccessRedirectUrl"
             />
+            <p v-if="redirectUrlError" class="text-xs text-ink-red-4">{{ redirectUrlError }}</p>
             <p class="text-xs text-ink-gray-5">Redirect users here after successful submission. Use <code class="px-1 py-0.5 bg-surface-gray-1 rounded-1 text-ink-gray-7">&#123;&#123;submission_id&#125;&#125;</code> for dynamic IDs.</p>
           </div>
         </section>

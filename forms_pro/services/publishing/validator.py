@@ -119,8 +119,13 @@ class PublishValidator:
         if mode == "Designed Page" and not self.form_doc.success_schema_json:
             self.warnings.append(_("Success page schema is empty — a default success message will be shown."))
         elif mode == "Redirect to External URL":
-            if not getattr(self.form_doc, "success_redirect_url", None):
+            url = (getattr(self.form_doc, "success_redirect_url", None) or "").strip()
+            if not url:
                 self.warnings.append(_("Redirect URL is not set."))
+            elif not url.lower().startswith(("http://", "https://")):
+                self.warnings.append(
+                    _("Redirect URL must start with http:// or https:// -- visitors will see the success page instead.")
+                )
 
     def _check_record_strategy(self) -> None:
         strategy = self.form_doc.record_strategy

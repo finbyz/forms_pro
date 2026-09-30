@@ -304,6 +304,7 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
         } else {
           inFormFillingState.value = false;
           inSuccessState.value = true;
+          redirectAfterSubmit(lastSubmissionId.value);
         }
       },
       onError(error: any) {
@@ -458,6 +459,52 @@ export const useSubmissionForm = defineStore("submissionForm", () => {
       } catch (e) {}
     }
   });
+
+  /**
+   * Send the visitor on to the form's "Redirect to External URL" target.
+   *
+   * The builder has always let an author choose that success mode and enter a
+   * URL, but nothing on this side ever read either -- every form showed its
+   * success page, whatever it was set to.
+   *
+   * `{{submission_id}}` in the URL is replaced, as the Settings tab promises.
+   * Only http(s) is followed: the URL is author-supplied, and a `javascript:`
+   * one would otherwise run in the visitor's browser.
+   *
+   * The short wait lets the embedding page receive the "submitted" message
+   * first, so a site's analytics still sees the conversion before the page
+   * goes away. Inside an embed it is the host page that moves, not the frame.
+   */
+  function redirectAfterSubmit(submissionId: string | null) {
+    const data = formResource.value?.data;
+    if (data?.success_mode !== "Redirect to External URL") return;
+
+    const raw = String(data.success_redirect_url || "").trim();
+    if (!raw) return;
+
+    let target: URL;
+    try {
+      target = new URL(
+        raw.replace(/\{\{\s*submission_id\s*\}\}/g, encodeURIComponent(submissionId ?? "")),
+        window.location.href
+      );
+    } catch {
+      return;
+    }
+    if (target.protocol !== "http:" && target.protocol !== "https:") return;
+
+    window.setTimeout(() => {
+      try {
+        if (window.top && window.top !== window) {
+          window.top.location.href = target.href;
+          return;
+        }
+      } catch {
+        // The host page refused navigation from the frame; move the frame.
+      }
+      window.location.href = target.href;
+    }, 300);
+  }
 
   function clearDraft() {
     const formName = formResource.value?.data?.name;

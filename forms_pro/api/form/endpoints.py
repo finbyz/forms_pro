@@ -93,6 +93,13 @@ def _published_schema(version_name: str) -> dict | None:
         "success_description": schema.get("success_description"),
         "allow_incomplete": schema.get("allow_incomplete"),
         "login_required": schema.get("login_required"),
+        # A version published before these were snapshotted has neither, so
+        # fall back to the draft's value rather than dropping the redirect.
+        **{
+            key: schema[key]
+            for key in ("success_mode", "success_redirect_url")
+            if key in schema
+        },
         # Visitors get the theme that was live when this version was published,
         # not whatever the builder happens to be editing.
         "theme_overrides_json": version.theme_json or None,
