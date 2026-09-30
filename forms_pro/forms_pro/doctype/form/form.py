@@ -25,7 +25,7 @@ def _doctype_signature(doctype_doc) -> tuple:
         doctype_doc.naming_rule,
         doctype_doc.title_field,
         tuple(
-            (df.fieldname, df.idx, df.label, df.fieldtype, df.reqd, df.options)
+            (df.fieldname, df.idx, df.label, df.fieldtype, df.reqd, df.options, df.read_only)
             for df in doctype_doc.fields
         ),
     )
@@ -187,6 +187,15 @@ class Form(Document):
                 for prop in SYNCED_PROPS:
                     if prop in wanted and current.get(prop) != wanted[prop]:
                         current.set(prop, wanted[prop])
+
+            # A rich-text answer is read-only in the desk. The desk's editor is
+            # Quill, which cannot represent what this form's editor produces --
+            # header cells, paragraphs inside table cells, task lists -- and it
+            # writes its own lossy version back the moment the record is saved
+            # for any reason. A read-only field is never loaded into Quill; the
+            # desk just shows the stored HTML, exactly as it was submitted.
+            if current.fieldtype == "Text Editor" and not current.read_only:
+                current.read_only = 1
 
             ordered.append(current)
             seen.add(field.fieldname)
