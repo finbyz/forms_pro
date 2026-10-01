@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { canonicalHtml, sameHtml } from "@/utils/html_equivalence";
 import { sameDoc } from "@/utils/doc_equivalence";
+import { mergeSavedDoc } from "@/utils/saved_doc_merge";
 import { ref, computed, watch, onUnmounted, nextTick } from "vue";
 import { createDocumentResource, createResource } from "frappe-ui";
 import {
@@ -30,6 +31,24 @@ export const useEditForm = defineStore("editForm", () => {
   const formResource = ref<any>(null);
   const currentFormId = ref<string | null>(null);
   const selectedField = ref<FormField | null>(null);
+
+  /**
+   * Keep the properties panel on a row that is actually in the form.
+   *
+   * Reloading the form, undo and redo all replace the field list with new
+   * objects. The panel edits `selectedField` directly, so pointing at a row
+   * from the old list meant every change made there went nowhere. Re-found by
+   * row name, or by fieldname for a row the server has not named yet.
+   */
+  function reattachSelectedField() {
+    const current = selectedField.value;
+    const fs: FormField[] | undefined = formResource.value?.doc?.fields;
+    if (!current || !fs || fs.includes(current)) return;
+    selectedField.value =
+      (current.name && fs.find((f) => f.name === current.name)) ||
+      fs.find((f) => f.fieldname === current.fieldname) ||
+      null;
+  }
   const activeSectionIndex = ref<number | 'success'>(0);
   // "Unsaved" means the content differs from the saved copy, not merely its
   // bytes -- see utils/doc_equivalence.ts for the loop the raw flag caused.
@@ -168,6 +187,8 @@ export const useEditForm = defineStore("editForm", () => {
       autosaveTimer = null;
     }
   }
+
+  watch(() => formResource.value?.doc?.fields, reattachSelectedField, { flush: "sync" });
 
   // Watch fields for autosave + history snapshots
   watch(
@@ -424,8 +445,42 @@ export const useEditForm = defineStore("editForm", () => {
     );
   }
 
+  /**
+   * Save without letting frappe-ui swap the document out from under the
+   * builder. It replaces the edited document with the server's copy on success
+   * and with a pre-save copy on failure; either way the properties panel was
+   * left editing a row that was no longer in the form, and anything typed
+   * while the save was in flight was lost. See utils/saved_doc_merge.ts.
+   */
+  async function submitKeepingLocalDoc(): Promise<unknown> {
+    const resource = formResource.value;
+    const live = resource.doc;
+    const sentRows = [...(live.fields || [])];
+    const sent = JSON.parse(JSON.stringify(live));
+    const putBack = () => {
+      if (formResource.value === resource && resource.doc !== live) resource.doc = live;
+    };
+    let result: unknown;
+    try {
+      result = await resource.setValue.submit(live);
+    } catch (error) {
+      // The failed save is retried, or reported; the edits stay either way.
+      putBack();
+      throw error;
+    }
+    if (resource.doc && resource.doc !== live) {
+      mergeSavedDoc(live, sent, sentRows, resource.doc);
+    }
+    putBack();
+    // Edited while the save was on its way: that edit still needs saving.
+    if (formResource.value === resource && !sameDoc(live, resource.originalDoc)) {
+      triggerAutosave();
+    }
+    return result;
+  }
+
   async function persist(successMessage?: string, silent = false): Promise<unknown> {
-    const submit = () => formResource.value.setValue.submit(formResource.value.doc);
+    const submit = () => submitKeepingLocalDoc();
 
     try {
       const result = await submit();
