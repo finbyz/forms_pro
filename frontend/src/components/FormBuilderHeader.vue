@@ -238,9 +238,21 @@ const moreDropdownOptions = computed(() => [
 
                 <!-- Form title + status + route -->
                 <div class="flex items-center gap-2 min-w-0">
-                    <h1 class="text-sm-semibold text-ink-gray-9 truncate max-w-[120px] md:max-w-[200px] lg:max-w-[260px]">
-                        {{ editFormStore.originalFormData?.title || "Untitled Form" }}
-                    </h1>
+                    <!--
+                        The form's name, edited here. The heading on the canvas
+                        belongs to the step being edited, so in a multi-step
+                        form this is the only place the form itself is named.
+                    -->
+                    <input
+                        v-if="editFormStore.formData"
+                        v-model="editFormStore.formData.title"
+                        type="text"
+                        aria-label="Form name"
+                        placeholder="Untitled Form"
+                        :title="editFormStore.formData.title || 'Untitled Form'"
+                        class="form-name-input text-sm-semibold text-ink-gray-9 bg-transparent border border-transparent rounded px-1 py-0.5 -mx-1 truncate min-w-[4ch] max-w-[120px] md:max-w-[200px] lg:max-w-[260px] hover:border-outline-gray-2 focus:border-outline-gray-3 focus:bg-surface-white focus:outline-none focus:ring-0 placeholder:text-ink-gray-4"
+                        @keydown.enter="($event.target as HTMLInputElement).blur()"
+                    />
                     <Tooltip
                         v-if="editFormStore.originalFormData?.route"
                         text="Open live form"
@@ -331,3 +343,9 @@ const moreDropdownOptions = computed(() => [
     <PreviewDialog :show="showPreview" @close="showPreview = false" />
 </template>
 
+<style scoped>
+/* As wide as the name, within the max-width above. */
+.form-name-input {
+    field-sizing: content;
+}
+</style>

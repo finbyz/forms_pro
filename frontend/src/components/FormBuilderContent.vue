@@ -14,6 +14,7 @@ import DropIndicator from "@/components/builder/DropIndicator.vue";
 import { resolveDropTarget, type DropTarget } from "@/utils/dropGeometry";
 import { readDragPayload, readRows, type DragPayload } from "@/utils/canvasDropTarget";
 import { sameHtml } from "@/utils/html_equivalence";
+import { findStepPageBreakIndex } from "@/utils/form_steps";
 import SectionNavBar from "@/components/builder/SectionNavBar.vue";
 import SuccessCanvas from "@/components/studio/success/SuccessCanvas.vue";
 
@@ -78,6 +79,50 @@ function colIndexOf(col: FormField[], cIdx: number): number {
  * description edit triggers an autosave, treating that as an edit would save
  * and flag "Publish changes" the moment the builder opened.
  */
+/**
+ * Which description the box under the title edits. The first step shows the
+ * form's own description; every later step has its own, so a multi-step form
+ * can say something different at the top of each step.
+ */
+const activeStepNumber = computed(() =>
+    typeof editFormStore.activeSectionIndex === "number" ? editFormStore.activeSectionIndex : 0
+);
+const editsStepDescription = computed(
+    () => editFormStore.isMultiSection && activeStepNumber.value > 0
+);
+const activeDescription = computed(() =>
+    editsStepDescription.value
+        ? editFormStore.sections[activeStepNumber.value]?.description ?? ""
+        : editFormStore.formData.description
+);
+
+/**
+ * The heading above that description. In a multi-step form it is the step's
+ * own name -- what the step tabs and the public form show for it -- on every
+ * step, the first included. It used to be the form's title, so every step had
+ * the same heading, and naming the first step renamed the whole form. The
+ * form's name is edited in the header instead.
+ */
+const editsStepHeading = computed(() => editFormStore.isMultiSection);
+
+const activeStepHeading = computed(() => {
+    const fs = editFormStore.fields as FormField[];
+    const pbIdx = findStepPageBreakIndex(fs, activeStepNumber.value);
+    return pbIdx === -1 ? "" : fs[pbIdx].label ?? "";
+});
+
+function onStepHeadingInput(event: Event) {
+    editFormStore.renameStep(activeStepNumber.value, (event.target as HTMLInputElement).value);
+}
+
+function onActiveDescriptionChange(value: string) {
+    if (editsStepDescription.value) {
+        editFormStore.setStepDescription(activeStepNumber.value, value);
+    } else {
+        onDescriptionChange(value);
+    }
+}
+
 function onDescriptionChange(value: string) {
     // Same content written differently -- the server's rewrite of an inline
     // style, or an empty editor's `<p></p>` -- is not an edit. Writing it back
@@ -278,16 +323,31 @@ onClickOutside(fieldContentRef, (event) => {
                     <div class="p-8">
                         <div class="flex flex-col gap-3 mb-8">
                             <input
+                                v-if="editsStepHeading"
+                                :key="`step-heading-${activeStepNumber}`"
+                                type="text"
+                                class="outline-none bg-transparent border-none text-2xl-semibold text-ink-gray-9 focus:ring-0 p-0 placeholder:text-ink-gray-4"
+                                :placeholder="`Step ${activeStepNumber + 1}`"
+                                :value="activeStepHeading"
+                                @input="onStepHeadingInput"
+                            />
+                            <input
+                                v-else
                                 type="text"
                                 class="outline-none bg-transparent border-none text-2xl-semibold text-ink-gray-9 focus:ring-0 p-0 placeholder:text-ink-gray-4"
                                 placeholder="Untitled Form"
                                 v-model="editFormStore.formData.title"
                             />
                             <TextEditor
-                                :content="editFormStore.formData.description"
+                                :key="editsStepDescription ? `step-${activeStepNumber}` : 'form'"
+                                :content="activeDescription"
                                 editor-class="h-fit !w-full form-description text-ink-gray-7"
-                                placeholder="Write a description for your form"
-                                @change="onDescriptionChange"
+                                :placeholder="
+                                    editsStepDescription
+                                        ? `Write a description for ${editFormStore.sections[activeStepNumber]?.label || 'this step'}`
+                                        : 'Write a description for your form'
+                                "
+                                @change="onActiveDescriptionChange"
                                 :starterkit-options="{
                                     heading: {
                                         levels: [1, 2, 3, 4, 5, 6],

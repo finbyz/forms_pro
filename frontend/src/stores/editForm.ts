@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { canonicalHtml } from "@/utils/html_equivalence";
+import { canonicalHtml, sameHtml } from "@/utils/html_equivalence";
 import { sameDoc } from "@/utils/doc_equivalence";
 import { ref, computed, watch, onUnmounted, nextTick } from "vue";
 import { createDocumentResource, createResource } from "frappe-ui";
@@ -17,6 +17,7 @@ import {
   removeStepKeepFields as removeStepKeepFieldsUtil,
   removeStepWithFields as removeStepWithFieldsUtil,
   renameStep as renameStepUtil,
+  findStepPageBreakIndex,
   type FormStep,
 } from "@/utils/form_steps";
 import { FormField, Fieldtype } from "@/types/formfield";
@@ -951,6 +952,22 @@ export const useEditForm = defineStore("editForm", () => {
     renameStepUtil(fs, index, newLabel);
   }
 
+  /**
+   * Give step `index` its own description. It is kept on the Page Break that
+   * opens the step; the first step has no Page Break of its own and uses the
+   * form's description.
+   */
+  function setStepDescription(index: number, html: string) {
+    const fs: FormField[] = formResource.value?.doc?.fields;
+    if (!fs || index < 1) return;
+    const pbIdx = findStepPageBreakIndex(fs, index);
+    if (pbIdx === -1) return;
+    // The server's rewrite of the same content is not an edit; see
+    // utils/html_equivalence.ts.
+    if (sameHtml(html, fs[pbIdx].description)) return;
+    fs[pbIdx].description = html;
+  }
+
   function selectField(field: FormField | null) {
     selectedField.value = field;
   }
@@ -1014,6 +1031,7 @@ export const useEditForm = defineStore("editForm", () => {
     removeStepKeepFields,
     removeStepWithFields,
     renameStep,
+    setStepDescription,
     selectField,
     updateField,
     removeField,

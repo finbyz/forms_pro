@@ -5,6 +5,7 @@ import {
   insertFieldAtStepEnd,
   renameStep,
   groupFieldsIntoSteps,
+  findStepPageBreakIndex,
 } from "./form_steps";
 
 function dataField(row: number, fieldname: string): FormField {
@@ -130,5 +131,47 @@ describe("renameStep step 0 without a leading Page Break", () => {
     expect(steps).toHaveLength(1);
     expect(steps[0].label).toBe("Intro");
     expect(steps[0].fields.map((f) => f.fieldname)).toEqual(["a", "b"]);
+  });
+});
+
+describe("step descriptions", () => {
+  function described(row: number, label: string, description: string): FormField {
+    return { ...pageBreak(row, label), description } as FormField;
+  }
+
+  it("gives each later step the description of the Page Break that opens it", () => {
+    const steps = groupFieldsIntoSteps([
+      dataField(0, "a"),
+      described(1, "Company", "<p>About your company</p>"),
+      dataField(2, "b"),
+      described(3, "Contact", "<p>How to reach you</p>"),
+      dataField(4, "c"),
+    ]);
+    expect(steps.map((s) => s.description)).toEqual([
+      "",
+      "<p>About your company</p>",
+      "<p>How to reach you</p>",
+    ]);
+  });
+
+  it("leaves the first step to the form's own description", () => {
+    const steps = groupFieldsIntoSteps([
+      described(0, "Intro", "<p>ignored</p>"),
+      dataField(1, "a"),
+      described(2, "Second", "<p>second</p>"),
+      dataField(3, "b"),
+    ]);
+    expect(steps[0].description).toBe("");
+    expect(steps[1].description).toBe("<p>second</p>");
+  });
+
+  it("finds the Page Break that holds a step's description", () => {
+    const fields = [
+      dataField(0, "a"),
+      described(1, "Company", ""),
+      dataField(2, "b"),
+      described(3, "Contact", ""),
+    ];
+    expect(fields[findStepPageBreakIndex(fields, 2)].label).toBe("Contact");
   });
 });

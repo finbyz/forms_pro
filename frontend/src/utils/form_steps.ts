@@ -9,6 +9,12 @@ import {
 
 export type FormStep = {
   label: string;
+  /**
+   * What the visitor reads at the top of this step. Stored on the Page Break
+   * that opens the step, so it is published with the form like any other
+   * field property. The first step uses the form's own description instead.
+   */
+  description?: string;
   fields: FormField[];
 };
 
@@ -41,6 +47,7 @@ export function groupFieldsIntoSteps(
   const result: FormStep[] = [];
   let current: FormField[] = [];
   let nextLabel = "";
+  let nextDescription = "";
   let isFirst = true;
 
   for (const field of fields) {
@@ -52,10 +59,12 @@ export function groupFieldsIntoSteps(
       }
       result.push({
         label: nextLabel || labelFallback(result.length + 1),
+        description: result.length === 0 ? "" : nextDescription,
         fields: current,
       });
       current = [];
       nextLabel = field.label || "";
+      nextDescription = field.description || "";
       continue;
     }
     isFirst = false;
@@ -65,6 +74,7 @@ export function groupFieldsIntoSteps(
   if (alwaysIncludeTrailing || current.length > 0 || result.length > 0) {
     result.push({
       label: nextLabel || labelFallback(result.length + 1),
+      description: result.length === 0 ? "" : nextDescription,
       fields: current,
     });
   }
