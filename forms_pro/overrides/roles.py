@@ -14,8 +14,7 @@ def has_forms_pro_permission() -> bool:
 
 
 def handle_forms_pro_role_change(doc, method) -> None:
-    user: User = frappe.get_doc("User", doc.name)
-    user.on_update()
+    user: User = doc
 
     if user.has_value_changed("roles"):
         try:
