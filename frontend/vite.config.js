@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
-        frappeui({
+        filterIconPluginHooks(frappeui({
             frappeProxy: true,
             jinjaBootData: true,
             lucideIcons: true,
@@ -19,7 +19,7 @@ export default defineConfig({
                 emptyOutDir: true,
                 sourcemap: false,
             },
-        }),
+        })),
         vue(),
     ],
     build: {
@@ -50,3 +50,32 @@ export default defineConfig({
         allowedHosts: true,
     },
 });
+
+function filterIconPluginHooks(plugins) {
+    return plugins.flat(Infinity).map((plugin) => {
+        // Native filters avoid a JS callback for every unrelated dependency.
+        if (plugin.name === "frappe-ui-lucide-icons") {
+            return {
+                ...plugin,
+                resolveId: {
+                    filter: { id: /^~icons\/lucide\// },
+                    handler: plugin.resolveId,
+                },
+                load: {
+                    filter: { id: /^\0~icons\/lucide\// },
+                    handler: plugin.load,
+                },
+            };
+        }
+        if (plugin.name === "unplugin-vue-components") {
+            return {
+                ...plugin,
+                transform: {
+                    filter: { code: /resolveComponent|resolveDirective/ },
+                    handler: plugin.transform,
+                },
+            };
+        }
+        return plugin;
+    });
+}
